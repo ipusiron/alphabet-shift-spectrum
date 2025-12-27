@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; script-src 'self';">
+  <title>Alphabet Shift Spectrum</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style-mobile.css">
+  <link rel="stylesheet" href="style-tablet.css" media="(min-width: 600px)">
+  <link rel="stylesheet" href="style-laptop.css" media="(min-width: 900px)">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Alphabet Shift Spectrum</h1>
+    <p class="app-subtitle">26シフトすべての文字頻度を可視化し、低頻度文字（J,K,Q,X,Z）の統計的フィルタリングで候補を絞り込む。</p>
+  </header>
+
+  <nav class="tab-navigation" role="tablist">
+    <button class="tab-button active" role="tab" aria-selected="true" aria-controls="tab1-panel" data-tab="tab1">
+      シフト一覧
+    </button>
+    <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab2-panel" data-tab="tab2">
+      分析・フィルター
+    </button>
+    <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab3-panel" data-tab="tab3" disabled>
+      Tab3 (準備中)
+    </button>
+    <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab4-panel" data-tab="tab4" disabled>
+      Tab4 (準備中)
+    </button>
+  </nav>
+
+  <!-- 入力セクション（タブ共通） -->
+  <div class="container input-container">
+    <div class="input-section">
+      <label for="cipher-input">暗号文を入力</label>
+      <textarea id="cipher-input" rows="4" placeholder="暗号文を入力してください（英字のみ使用）"></textarea>
+      <div class="input-actions">
+        <div class="input-info">
+          <span id="char-count">有効文字数: 0</span>
+        </div>
+        <button id="generate-btn" class="btn-primary">シフト生成</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+    <!-- Tab1: シフト一覧 -->
+    <section id="tab1-panel" class="tab-panel active" role="tabpanel">
+      <div id="shift-results" class="shift-results">
+        <!-- 動的に生成されるシフト結果 -->
+      </div>
+    </section>
+
+    <!-- Tab2: 分析・フィルター -->
+    <section id="tab2-panel" class="tab-panel" role="tabpanel" hidden>
+      <div class="heatmap-section">
+        <h2>頻度ヒートマップ</h2>
+        <p class="heatmap-legend">
+          <span class="legend-item"><span class="legend-color low"></span>低頻度</span>
+          <span class="legend-item"><span class="legend-color mid"></span>中頻度</span>
+          <span class="legend-item"><span class="legend-color high"></span>高頻度</span>
+        </p>
+        <div id="heatmap-container" class="heatmap-container">
+          <p class="placeholder-message">シフト生成後にヒートマップが表示されます</p>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h2>低頻度文字分析 (J, K, Q, X, Z)</h2>
+        <p class="filter-description">J, K, Q, X, Z のいずれかが除外閾値以上のシフトは候補から除外されます</p>
+
+        <div class="threshold-subsection">
+          <h3>除外閾値の計算</h3>
+          <div class="threshold-info">
+            <div class="threshold-item">
+              <span class="threshold-label">文字数</span>
+              <span class="threshold-value" id="text-length">0</span>
+            </div>
+            <div class="threshold-item">
+              <span class="threshold-label">期待頻度</span>
+              <span class="threshold-value">0.00772</span>
+            </div>
+            <div class="threshold-item">
+              <span class="threshold-label">除外閾値</span>
+              <span class="threshold-value" id="m-threshold">-</span>
+            </div>
+          </div>
+          <div class="threshold-formula-container">
+            <div class="threshold-formula">
+              <span class="formula-label">除外閾値</span>
+              <span class="formula-equals">=</span>
+              <span class="formula-ceil">⌈</span>
+              <span class="formula-content">
+                <span class="formula-var">n</span> × <span class="formula-const">p</span>
+                + 3 × √(<span class="formula-var">n</span> × <span class="formula-const">p</span>)
+              </span>
+              <span class="formula-ceil">⌉</span>
+            </div>
+            <button type="button" class="help-btn" id="formula-help-btn" aria-label="計算式の解説を表示">?</button>
+          </div>
+          <p class="formula-note"><span class="formula-var">n</span> = 文字数, <span class="formula-const">p</span> = 0.00772</p>
+        </div>
+
+        <div class="filter-results-header">
+          <h3>フィルター結果</h3>
+          <span class="tooltip-container">
+            <span class="help-icon">?</span>
+            <span class="tooltip-text">
+              <strong>最大</strong>：J,K,Q,X,Z の中で最も多い出現回数<br>
+              <strong>合計</strong>：J,K,Q,X,Z の出現回数の合計
+            </span>
+          </span>
+        </div>
+        <div id="filter-results" class="filter-results">
+          <p class="placeholder-message">シフト生成後にフィルター結果が表示されます</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab3: 準備中 -->
+    <section id="tab3-panel" class="tab-panel" role="tabpanel" hidden>
+      <p class="placeholder-message">将来機能追加予定</p>
+    </section>
+
+    <!-- Tab4: 準備中 -->
+    <section id="tab4-panel" class="tab-panel" role="tabpanel" hidden>
+      <p class="placeholder-message">将来機能追加予定</p>
+    </section>
+  </main>
+
+  <!-- 計算式解説モーダル -->
+  <div id="formula-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>除外閾値の計算について</h3>
+        <button type="button" class="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <h4>なぜこの計算式？</h4>
+        <p>英語テキストにおいて、J, K, Q, X, Z は出現頻度が非常に低い文字です。正しいシフト量で復号された場合、これらの文字が多く出現することは統計的に稀です。</p>
+
+        <h4>期待頻度 p = 0.00772</h4>
+        <p>この値は J, K, Q, X, Z の中で最も高い出現頻度（K の約0.772%）に基づいています。これを基準として、異常に高い出現を検出します。</p>
+
+        <h4>計算式の意味</h4>
+        <p>除外閾値 = ⌈n × p + 3 × √(n × p)⌉</p>
+        <ul>
+          <li><strong>n × p</strong>：文字数 n に対する期待出現回数</li>
+          <li><strong>3 × √(n × p)</strong>：標準偏差の3倍（3σ）</li>
+          <li><strong>⌈ ⌉</strong>：切り上げ（天井関数）</li>
+        </ul>
+        <p>二項分布の正規近似に基づき、期待値から3標準偏差以上離れた値を「異常」と判定します。これは約99.7%の信頼区間に相当します。</p>
+
+        <h4>判定ロジック</h4>
+        <p>各シフトについて J, K, Q, X, Z の最大出現回数を求め、それが除外閾値以上であれば、そのシフトは正しい復号ではない可能性が高いと判断して候補から除外します。</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <div class="footer">
+      🔗 GitHubリポジトリはこちら（<a href="https://github.com/ipusiron/alphabet-shift-spectrum" target="_blank" rel="noopener noreferrer">ipusiron/alphabet-shift-spectrum</a>）
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

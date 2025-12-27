@@ -1,0 +1,90 @@
+/* ==========================================================================
+   Alphabet Shift Spectrum - Laptop/PC Styles (min-width: 900px)
+   ========================================================================== */
+
+/* Header */
+.app-header {
+  padding: var(--spacing-lg);
+}
+
+.app-header h1 {
+  font-size: 2rem;
+}
+
+/* Tab Navigation */
+.tab-button {
+  padding: var(--spacing-md) var(--spacing-xl);
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  padding: var(--spacing-xl);
+}
+
+/* Input Container */
+.input-container {
+  padding-bottom: var(--spacing-xl);
+}
+
+/* Input Section */
+.input-section {
+  padding: var(--spacing-xl) var(--spacing-xl);
+}
+
+#generate-btn {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: 1.125rem;
+}
+
+/* Shift Results - Single column, centered */
+.shift-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Frequency Table */
+.freq-table {
+  min-width: auto;
+}
+
+.freq-table th,
+.freq-table td {
+  min-width: 32px;
+}
+
+/* Heatmap - Fit within container, no scroll */
+.heatmap-grid {
+  min-width: auto;
+  grid-template-columns: 3rem repeat(26, 1fr);
+  gap: 2px;
+}
+
+.heatmap-header {
+  font-size: 0.75rem;
+  padding: 0.25rem;
+}
+
+.heatmap-row-label {
+  font-size: 0.75rem;
+  min-width: 3rem;
+}
+
+.heatmap-cell {
+  font-size: 0.75rem;
+  min-height: 1.625rem;
+  padding: 0.125rem;
+}
+
+/* Filter Results - Side by side */
+.filter-results {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.filter-group {
+  min-width: auto;
+}

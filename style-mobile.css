@@ -1,0 +1,425 @@
+/* ==========================================================================
+   Alphabet Shift Spectrum - Mobile Styles (Default)
+   ========================================================================== */
+
+/* Header */
+.app-header {
+  background-color: var(--color-surface);
+  padding: var(--spacing-md);
+  text-align: center;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header h1 {
+  margin-bottom: var(--spacing-xs);
+}
+
+.app-subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab-navigation::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tab-navigation::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+.tab-navigation::-webkit-scrollbar-thumb {
+  background: var(--color-border-dark);
+  border-radius: 2px;
+}
+
+.tab-button {
+  flex-shrink: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.tab-button:hover:not(:disabled) {
+  background-color: var(--color-border);
+}
+
+.tab-button.active {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.tab-button:disabled {
+  background-color: var(--color-bg);
+  color: var(--color-border-dark);
+}
+
+/* Main Container */
+.container {
+  padding: var(--spacing-md);
+  max-width: 100%;
+}
+
+/* Input Container (shared across tabs) */
+.input-container {
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Tab Panels */
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* Input Section */
+.input-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  background-color: var(--color-surface);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.input-section label {
+  text-align: center;
+  font-size: 1rem;
+}
+
+#cipher-input {
+  width: 100%;
+  min-height: 100px;
+}
+
+.input-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.input-info {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+#generate-btn {
+  width: 100%;
+  max-width: 200px;
+}
+
+/* Shift Results */
+.shift-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.shift-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+}
+
+.shift-card.rejected {
+  opacity: 0.6;
+  border-color: var(--color-danger);
+}
+
+.shift-card.candidate {
+  border-color: var(--color-success);
+  border-width: 2px;
+}
+
+.shift-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shift-number {
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--color-primary);
+}
+
+.shift-status {
+  font-size: 0.75rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+}
+
+.shift-status.candidate {
+  background-color: #dcfce7;
+  color: var(--color-success);
+}
+
+.shift-status.rejected {
+  background-color: #fee2e2;
+  color: var(--color-danger);
+}
+
+.shift-text {
+  font-family: "Courier New", Consolas, monospace;
+  font-size: 0.875rem;
+  word-break: break-all;
+  background-color: var(--color-bg);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-md);
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.freq-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.freq-table {
+  min-width: 650px;
+  font-size: 0.75rem;
+}
+
+.freq-table th,
+.freq-table td {
+  padding: var(--spacing-xs);
+  min-width: 24px;
+}
+
+/* Threshold Subsection (inside filter-section) */
+.threshold-subsection {
+  background-color: var(--color-bg);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin: var(--spacing-md) 0;
+}
+
+.threshold-subsection h3 {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--spacing-md);
+  text-align: center;
+}
+
+.threshold-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.threshold-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+  background-color: var(--color-bg);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+}
+
+.threshold-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.threshold-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.threshold-formula {
+  font-family: "Courier New", Consolas, monospace;
+  font-size: 0.875rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-md);
+  margin-bottom: 0;
+}
+
+/* Heatmap Section */
+.heatmap-section {
+  background-color: var(--color-surface);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--spacing-lg);
+}
+
+.heatmap-legend {
+  margin-bottom: var(--spacing-md);
+}
+
+.heatmap-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: auto repeat(26, minmax(1.25rem, 1fr));
+  gap: 1px;
+  min-width: 600px;
+}
+
+.heatmap-header {
+  font-weight: 700;
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg);
+  padding: var(--spacing-xs);
+}
+
+.heatmap-header.low-freq {
+  background-color: var(--low-freq-bg);
+}
+
+.heatmap-row-label {
+  font-weight: 600;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg);
+  padding: var(--spacing-xs);
+  min-width: 2.5rem;
+}
+
+.heatmap-cell {
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.5rem;
+  border-radius: 2px;
+  cursor: crosshair;
+  transition: outline 0.1s;
+}
+
+.heatmap-cell.low-freq-col {
+  border: 1px solid var(--low-freq-border);
+}
+
+/* Filter Section */
+.filter-section {
+  background-color: var(--color-surface);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.filter-description {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.filter-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.filter-group {
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+}
+
+.filter-group.candidates {
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.filter-group.rejected {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.filter-group h3 {
+  font-size: 0.875rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.filter-group.candidates h3 {
+  color: var(--color-success);
+}
+
+.filter-group.rejected h3 {
+  color: var(--color-danger);
+}
+
+.filter-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.filter-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.filter-item.candidate {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.filter-item.rejected {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.filter-item .m-value {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+/* Footer */
+.app-footer {
+  text-align: center;
+  padding: var(--spacing-lg);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--spacing-xl);
+}
+
+.app-footer p {
+  margin: 0;
+}

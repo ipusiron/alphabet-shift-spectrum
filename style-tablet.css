@@ -1,0 +1,144 @@
+/* ==========================================================================
+   Alphabet Shift Spectrum - Tablet Styles (min-width: 600px)
+   ========================================================================== */
+
+/* Header */
+.app-header h1 {
+  font-size: 1.75rem;
+}
+
+.app-subtitle {
+  font-size: 1rem;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+}
+
+.tab-button {
+  font-size: 1rem;
+  padding: var(--spacing-sm) var(--spacing-lg);
+}
+
+/* Container */
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+}
+
+/* Input Container */
+.input-container {
+  padding-bottom: var(--spacing-xl);
+}
+
+/* Input Section */
+.input-section {
+  padding: var(--spacing-xl);
+  gap: var(--spacing-lg);
+}
+
+.input-section label {
+  font-size: 1.125rem;
+}
+
+.input-actions {
+  flex-direction: row;
+  justify-content: center;
+  gap: var(--spacing-xl);
+}
+
+#generate-btn {
+  width: auto;
+  max-width: none;
+  padding: var(--spacing-sm) var(--spacing-xl);
+}
+
+/* Shift Results - Centered */
+.shift-results {
+  max-width: 750px;
+  margin: 0 auto;
+}
+
+/* Shift Card */
+.shift-card {
+  padding: var(--spacing-lg);
+}
+
+.shift-text {
+  font-size: 1rem;
+  max-height: 100px;
+}
+
+/* Frequency Table */
+.freq-table {
+  font-size: 0.875rem;
+}
+
+.freq-table th,
+.freq-table td {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  min-width: 28px;
+}
+
+/* Threshold Subsection */
+.threshold-subsection {
+  padding: var(--spacing-lg);
+}
+
+.threshold-item {
+  padding: var(--spacing-md);
+}
+
+.threshold-value {
+  font-size: 1.5rem;
+}
+
+/* Heatmap - Fit within container */
+.heatmap-section {
+  padding: var(--spacing-lg);
+}
+
+.heatmap-container {
+  overflow-x: visible;
+}
+
+.heatmap-grid {
+  min-width: auto;
+  grid-template-columns: 2.5rem repeat(26, 1fr);
+  gap: 2px;
+}
+
+.heatmap-header {
+  font-size: 0.6875rem;
+  padding: 0.25rem;
+}
+
+.heatmap-row-label {
+  font-size: 0.6875rem;
+  min-width: 2.5rem;
+}
+
+.heatmap-cell {
+  font-size: 0.6875rem;
+  min-height: 1.5rem;
+  padding: 0.125rem;
+}
+
+/* Filter Section */
+.filter-section {
+  padding: var(--spacing-lg);
+}
+
+.filter-results {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  flex: 1;
+  min-width: 280px;
+}
