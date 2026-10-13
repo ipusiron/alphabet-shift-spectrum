@@ -102,3 +102,69 @@ test('large supported input produces a finite exact threshold', () => {
   assert.ok(Number.isInteger(result.threshold));
   assert.ok(result.threshold > result.expected);
 });
+
+test('per-letter chi-square contributions add up to the total score', () => {
+  const row = Core.generateAllShifts('THEQUICKBROWNFOXJUMPSOVERTHELAZYDOG')[0];
+  const contributions = Core.calculateChiSquareContributions(row.freq, row.text.length);
+  const total = contributions.reduce((sum, item) => sum + item.contribution, 0);
+  assert.equal(contributions.length, 26);
+  assert.ok(Math.abs(total - Core.calculateChiSquare(row.freq, row.text.length)) < 1e-12);
+});
+
+test('top chi-square contributions are sorted and retain their evidence fields', () => {
+  const row = Core.generateAllShifts('EEEEEEEEEEETAOINSHRDLU')[0];
+  const top = Core.getTopChiSquareContributions(row, 5);
+  assert.equal(top.length, 5);
+  assert.ok(top.every((item) => (
+    typeof item.letter === 'string'
+    && Number.isInteger(item.observed)
+    && Number.isFinite(item.expected)
+    && Number.isFinite(item.difference)
+    && Number.isFinite(item.contribution)
+  )));
+  for (let index = 1; index < top.length; index += 1) {
+    assert.ok(top[index - 1].contribution >= top[index].contribution);
+  }
+});
+
+test('threshold sensitivity series compares half, base, and double sample sizes', () => {
+  const adjusted = Core.createThresholdSensitivitySeries({
+    sampleSize: 100,
+    pMax: Core.P_MAX,
+    familyAlpha: Core.FAMILY_ALPHA,
+    comparisonCount: 5,
+    useBonferroni: true
+  });
+  assert.deepEqual(adjusted.map((item) => item.sampleSize), [50, 100, 200]);
+  assert.ok(adjusted.every((item) => (
+    Math.abs(item.perComparisonAlpha - 0.0006) < Number.EPSILON
+  )));
+  assert.ok(adjusted[0].threshold <= adjusted[1].threshold);
+  assert.ok(adjusted[1].threshold <= adjusted[2].threshold);
+
+  const unadjusted = Core.createThresholdSensitivitySeries({
+    sampleSize: 100,
+    comparisonCount: 5,
+    useBonferroni: false
+  });
+  assert.ok(unadjusted.every((item) => item.perComparisonAlpha === Core.FAMILY_ALPHA));
+  assert.ok(adjusted[1].threshold >= unadjusted[1].threshold);
+});
+
+test('analysis summary contains reproducible conditions without plaintext', () => {
+  const text = 'KHOORZRUOG';
+  const thresholdInfo = {
+    ...Core.calculateRareLetterThreshold(text.length),
+    n: text.length
+  };
+  const rows = Core.analyzeRows(
+    Core.generateAllShifts(text),
+    thresholdInfo.threshold
+  );
+  const summary = Core.createAnalysisSummary(rows, thresholdInfo, 5);
+  assert.equal(summary.textLength, text.length);
+  assert.equal(summary.topShifts.length, 5);
+  assert.equal(summary.withinCount + summary.flaggedCount, 26);
+  assert.equal(Object.hasOwn(summary, 'text'), false);
+  assert.equal(JSON.stringify(summary).includes(text), false);
+});

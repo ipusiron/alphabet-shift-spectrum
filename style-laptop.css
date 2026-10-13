@@ -17,6 +17,19 @@ main.container {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.contribution-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sensitivity-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.checkbox-field,
+.sensitivity-reset {
+  grid-column: span 2;
+}
+
 .heatmap-grid {
   min-width: 0;
   grid-template-columns: 3rem repeat(26, minmax(1.65rem, 1fr));

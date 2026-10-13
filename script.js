@@ -16,7 +16,9 @@
     activeTab: 'tab1',
     messageKey: '',
     messageVars: {},
-    messageType: 'info'
+    messageType: 'info',
+    copyStatusKey: '',
+    copyFallbackVisible: false
   };
   let modalReturnFocus = null;
 
@@ -36,6 +38,15 @@
     if (className) element.className = className;
     if (text !== undefined) element.textContent = text;
     return element;
+  }
+
+  function formatDecimal(value, digits = 2) {
+    return Number(value).toFixed(digits);
+  }
+
+  function formatProbability(value) {
+    if (value < 0.001) return value.toExponential(2);
+    return Number(value.toFixed(6)).toString();
   }
 
   function getStoredLanguage() {
@@ -266,6 +277,62 @@
     container.appendChild(list);
   }
 
+  function renderContributionResults() {
+    const container = document.getElementById('chi-contribution-results');
+    container.replaceChildren();
+    if (appState.analyzedRows.length === 0) {
+      container.appendChild(createElement('p', 'placeholder-message', t('contributionPlaceholder')));
+      return;
+    }
+
+    const rankedRows = [...appState.analyzedRows]
+      .sort((a, b) => a.chiSquareRank - b.chiSquareRank)
+      .slice(0, 3);
+
+    for (const row of rankedRows) {
+      const card = createElement('article', 'contribution-card');
+      const heading = createElement('h4', '', `${t('chiRank', { rank: row.chiSquareRank })} · Shift ${row.shift}`);
+      const score = createElement('p', 'contribution-total', t('chiScore', {
+        score: formatDecimal(row.chiSquare)
+      }));
+      const wrapper = createElement('div', 'contribution-table-wrapper');
+      wrapper.tabIndex = 0;
+      const table = createElement('table', 'contribution-table');
+      table.appendChild(createElement(
+        'caption',
+        'visually-hidden',
+        t('contributionCaption', { shift: row.shift })
+      ));
+
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      ['', 'observed', 'expected', 'difference', 'contribution'].forEach((key) => {
+        const header = createElement('th', '', key ? t(key) : 'A–Z');
+        header.scope = 'col';
+        headerRow.appendChild(header);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      for (const item of Core.getTopChiSquareContributions(row, 5)) {
+        const dataRow = document.createElement('tr');
+        const letter = createElement('th', '', item.letter);
+        letter.scope = 'row';
+        dataRow.appendChild(letter);
+        dataRow.appendChild(createElement('td', '', item.observed));
+        dataRow.appendChild(createElement('td', '', formatDecimal(item.expected)));
+        dataRow.appendChild(createElement('td', '', formatDecimal(item.difference)));
+        dataRow.appendChild(createElement('td', '', formatDecimal(item.contribution)));
+        tbody.appendChild(dataRow);
+      }
+      table.appendChild(tbody);
+      wrapper.appendChild(table);
+      card.append(heading, score, wrapper);
+      container.appendChild(card);
+    }
+  }
+
   function createFilterGroup(rows, isWithin) {
     const group = createElement('section', `filter-group ${isWithin ? 'within' : 'flagged'}`);
     group.appendChild(createElement(
@@ -311,18 +378,207 @@
     document.getElementById('rare-threshold').textContent = appState.thresholdInfo?.threshold ?? '-';
   }
 
+  function readSensitivityInputs() {
+    return {
+      sampleSize: Number(document.getElementById('sensitivity-n').value),
+      pMax: Number(document.getElementById('sensitivity-p').value),
+      familyAlpha: Number(document.getElementById('sensitivity-alpha').value),
+      comparisonCount: Number(document.getElementById('sensitivity-comparisons').value),
+      useBonferroni: document.getElementById('sensitivity-adjust').checked
+    };
+  }
+
+  function setSensitivityDefaults(sampleSize = 100) {
+    document.getElementById('sensitivity-n').value = String(sampleSize);
+    document.getElementById('sensitivity-p').value = String(Core.P_MAX);
+    document.getElementById('sensitivity-alpha').value = String(Core.FAMILY_ALPHA);
+    document.getElementById('sensitivity-comparisons').value = String(Core.LOW_FREQ_LETTERS.length);
+    document.getElementById('sensitivity-adjust').checked = true;
+  }
+
+  function getSensitivityScaleKey(factor) {
+    if (factor < 1) return 'sensitivityHalf';
+    if (factor > 1) return 'sensitivityDouble';
+    return 'sensitivityBase';
+  }
+
+  function renderSensitivityLab() {
+    const message = document.getElementById('sensitivity-message');
+    const container = document.getElementById('sensitivity-results');
+    container.replaceChildren();
+    message.textContent = '';
+
+    const config = readSensitivityInputs();
+    const valid = Number.isInteger(config.sampleSize)
+      && config.sampleSize >= 1
+      && config.sampleSize <= Core.MAX_INPUT_LETTERS
+      && Number.isFinite(config.pMax)
+      && config.pMax > 0
+      && config.pMax <= 0.5
+      && Number.isFinite(config.familyAlpha)
+      && config.familyAlpha > 0
+      && config.familyAlpha <= 0.2
+      && Number.isInteger(config.comparisonCount)
+      && config.comparisonCount >= 1
+      && config.comparisonCount <= Core.ALPHABET.length;
+
+    if (!valid) {
+      message.textContent = t('sensitivityInvalid');
+      message.className = 'sensitivity-message error';
+      return;
+    }
+
+    let series;
+    try {
+      series = Core.createThresholdSensitivitySeries(config);
+    } catch {
+      message.textContent = t('sensitivityInvalid');
+      message.className = 'sensitivity-message error';
+      return;
+    }
+
+    message.className = 'sensitivity-message info';
+    message.textContent = t(
+      config.useBonferroni ? 'sensitivityAdjusted' : 'sensitivityUnadjusted',
+      { alpha: formatProbability(series[0].perComparisonAlpha) }
+    );
+
+    const wrapper = createElement('div', 'sensitivity-table-wrapper');
+    wrapper.tabIndex = 0;
+    const table = createElement('table', 'sensitivity-table');
+    table.appendChild(createElement('caption', 'visually-hidden', t('sensitivityTableCaption')));
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['sensitivityScale', 'textLength', 'sensitivityExpected', 'sensitivityThreshold', 'sensitivityPerAlpha', 'sensitivityGraph']
+      .forEach((key) => {
+        const header = createElement('th', '', t(key));
+        header.scope = 'col';
+        headerRow.appendChild(header);
+      });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const maxThreshold = Math.max(1, ...series.map((item) => item.threshold));
+    const tbody = document.createElement('tbody');
+    for (const item of series) {
+      const row = document.createElement('tr');
+      row.dataset.factor = String(item.factor);
+      row.dataset.threshold = String(item.threshold);
+      const scale = createElement('th', '', t(getSensitivityScaleKey(item.factor)));
+      scale.scope = 'row';
+      row.appendChild(scale);
+      row.appendChild(createElement('td', '', item.sampleSize));
+      row.appendChild(createElement('td', '', formatDecimal(item.expected, 3)));
+      row.appendChild(createElement('td', 'sensitivity-threshold-value', item.threshold));
+      row.appendChild(createElement('td', '', formatProbability(item.perComparisonAlpha)));
+      const graphCell = document.createElement('td');
+      const progress = document.createElement('progress');
+      progress.max = maxThreshold;
+      progress.value = item.threshold;
+      progress.setAttribute('aria-label', `${t(getSensitivityScaleKey(item.factor))}: k=${item.threshold}`);
+      graphCell.appendChild(progress);
+      row.appendChild(graphCell);
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
+  }
+
+  function buildAnalysisSummaryText() {
+    const summary = Core.createAnalysisSummary(appState.analyzedRows, appState.thresholdInfo, 5);
+    const lines = [
+      t('summaryTitle'),
+      t('summaryLength', { count: summary.textLength }),
+      t('summaryModel', {
+        p: summary.pMax,
+        alpha: summary.familyAlpha,
+        comparisons: summary.comparisonCount,
+        threshold: summary.threshold
+      }),
+      t('summaryTopHeading')
+    ];
+    summary.topShifts.forEach((row) => lines.push(t('summaryShift', {
+      rank: row.rank,
+      shift: row.shift,
+      score: formatDecimal(row.chiSquare)
+    })));
+    lines.push(t('summaryCounts', {
+      within: summary.withinCount,
+      flagged: summary.flaggedCount
+    }));
+    lines.push(t('summaryLimit'));
+    return lines.join('\n');
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fall through for file:// and restricted clipboard contexts.
+      }
+    }
+
+    const buffer = createElement('textarea', 'clipboard-buffer');
+    buffer.value = text;
+    buffer.setAttribute('readonly', '');
+    document.body.appendChild(buffer);
+    buffer.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch {
+      copied = false;
+    }
+    buffer.remove();
+    return copied;
+  }
+
+  function renderCopyControls() {
+    const button = document.getElementById('copy-summary-btn');
+    button.disabled = appState.analyzedRows.length === 0;
+    document.getElementById('copy-status').textContent = appState.copyStatusKey
+      ? t(appState.copyStatusKey)
+      : '';
+    const fallback = document.getElementById('copy-fallback');
+    fallback.hidden = !appState.copyFallbackVisible || appState.analyzedRows.length === 0;
+    if (!fallback.hidden) {
+      document.getElementById('copy-fallback-text').value = buildAnalysisSummaryText();
+    }
+  }
+
+  async function handleCopySummary() {
+    if (appState.analyzedRows.length === 0) return;
+    const copied = await copyText(buildAnalysisSummaryText());
+    appState.copyStatusKey = copied ? 'copySummarySuccess' : 'copySummaryFailure';
+    appState.copyFallbackVisible = !copied;
+    renderCopyControls();
+    if (!copied) {
+      const fallbackText = document.getElementById('copy-fallback-text');
+      fallbackText.focus();
+      fallbackText.select();
+    }
+  }
+
   function renderDynamicResults() {
     renderShiftResults();
     renderHeatmap();
     renderRankResults();
+    renderContributionResults();
     renderFilterResults();
     updateThresholdDisplay();
+    renderSensitivityLab();
+    renderCopyControls();
   }
 
   function clearAnalysis() {
     appState.normalizedText = '';
     appState.analyzedRows = [];
     appState.thresholdInfo = null;
+    appState.copyStatusKey = '';
+    appState.copyFallbackVisible = false;
     renderDynamicResults();
   }
 
@@ -346,6 +602,9 @@
       Core.generateAllShifts(normalizedText),
       thresholdInfo.threshold
     );
+    appState.copyStatusKey = '';
+    appState.copyFallbackVisible = false;
+    document.getElementById('sensitivity-n').value = String(normalizedText.length);
     renderDynamicResults();
     showMessage('ready', { count: normalizedText.length }, 'success');
   }
@@ -472,6 +731,13 @@
     document.getElementById('language-toggle').addEventListener('click', switchLanguage);
     document.getElementById('generate-btn').addEventListener('click', handleGenerate);
     document.getElementById('cipher-input').addEventListener('input', handleInputChange);
+    document.getElementById('copy-summary-btn').addEventListener('click', handleCopySummary);
+    document.getElementById('sensitivity-form').addEventListener('submit', (event) => event.preventDefault());
+    document.getElementById('sensitivity-form').addEventListener('input', renderSensitivityLab);
+    document.getElementById('sensitivity-reset').addEventListener('click', () => {
+      setSensitivityDefaults(appState.thresholdInfo?.n ?? 100);
+      renderSensitivityLab();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

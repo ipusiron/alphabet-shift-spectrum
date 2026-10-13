@@ -4,7 +4,7 @@ This file provides development guidance for Alphabet Shift Spectrum.
 
 ## Project overview
 
-Alphabet Shift Spectrum is a dependency-free browser tool for comparing all 26 Caesar shifts. It presents shifted text, A-Z counts, a heatmap, chi-square rankings against reference English frequencies, and an exact-binomial rare-letter screen.
+Alphabet Shift Spectrum is a dependency-free browser tool for comparing all 26 Caesar shifts. It presents shifted text, A-Z counts, a heatmap, chi-square rankings and per-letter contributions against reference English frequencies, an exact-binomial rare-letter screen, and an independent threshold sensitivity lab.
 
 The tool presents evidence for manual inspection. It does not prove the correct plaintext, key, language, or cipher type.
 
@@ -41,6 +41,14 @@ The Bonferroni adjustment applies to five letters within one shift. Do not descr
 
 Each shift is ranked by Pearson's chi-square statistic against the reference A-Z distribution. A smaller score is only a relative clue. Do not label the first-ranked shift as correct or attach a confidence percentage.
 
+The top three shifts expose the five largest per-letter contributions with observed counts, expected counts, differences, and contributions. Their sum is the same chi-square score used for ranking.
+
+### Threshold sensitivity lab
+
+The lab compares exact thresholds at half, base, and double sample sizes while allowing `n`, `p`, family `alpha`, comparison count, and Bonferroni adjustment to be changed. It is independent of the main rare-letter screen. Never present user-selected values as validated parameters for the current text.
+
+The copied summary contains conditions and derived results only. It must not contain the input text.
+
 ## Development
 
 No build or dependency installation is required.
@@ -57,6 +65,7 @@ node --check script.js
 - Keep Japanese and English dictionaries key-for-key identical.
 - Re-render all derived results after a language change.
 - Clear generated results when the input changes so stale analysis is never shown as current.
+- Re-render the threshold sensitivity lab and contribution evidence after every relevant input or language mutation.
 - Keep page-level width within 320px and 390px viewports; wide data tables and the heatmap may scroll inside their own containers.
 - Preserve visible focus, keyboard tab navigation, modal focus containment, and 44px touch targets.
 - Keep unimplemented tabs hidden.

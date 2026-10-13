@@ -133,6 +133,12 @@ try {
   await cdp.opened;
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
+  if (url.startsWith('http')) {
+    await cdp.send('Browser.grantPermissions', {
+      origin: new URL(url).origin,
+      permissions: ['clipboardReadWrite']
+    });
+  }
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width,
     height,
@@ -168,18 +174,104 @@ try {
     cards: document.querySelectorAll('.shift-card').length,
     heatmapCells: document.querySelectorAll('.heatmap-cell').length,
     rankItems: document.querySelectorAll('.rank-list li').length,
+    contributionCards: document.querySelectorAll('.contribution-card').length,
+    contributionRows: document.querySelectorAll('.contribution-table tbody tr').length,
+    sensitivityRows: document.querySelectorAll('.sensitivity-table tbody tr').length,
+    sensitivityBaseThreshold: document.querySelector('.sensitivity-table tbody tr[data-factor="1"]')?.dataset.threshold,
+    sensitivitySampleSize: document.getElementById('sensitivity-n').value,
+    copyEnabled: !document.getElementById('copy-summary-btn').disabled,
     threshold: document.getElementById('rare-threshold').textContent,
     message: document.getElementById('input-message').textContent,
     documentWidth: document.documentElement.scrollWidth,
     viewportWidth: window.innerWidth
   }))()`);
 
-  if (generated.cards !== 26 || generated.heatmapCells !== 676 || generated.rankItems !== 5) {
+  if (
+    generated.cards !== 26
+    || generated.heatmapCells !== 676
+    || generated.rankItems !== 5
+    || generated.contributionCards !== 3
+    || generated.contributionRows !== 15
+    || generated.sensitivityRows !== 3
+    || generated.sensitivityBaseThreshold !== generated.threshold
+    || generated.sensitivitySampleSize !== '138'
+    || !generated.copyEnabled
+  ) {
     throw new Error(`Unexpected generated counts: ${JSON.stringify(generated)}`);
   }
   if (generated.documentWidth > generated.viewportWidth) {
     throw new Error(`Page overflow: ${generated.documentWidth} > ${generated.viewportWidth}`);
   }
+
+  await evaluate(cdp, `(() => {
+    document.getElementById('tab2-button').click();
+    const button = document.getElementById('copy-summary-btn');
+    button.scrollIntoView({ block: 'center' });
+    return true;
+  })()`);
+  await delay(500);
+  const copyButtonPoint = await evaluate(cdp, `(() => {
+    const button = document.getElementById('copy-summary-btn');
+    const rect = button.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  if (width <= 500) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: copyButtonPoint.x, y: copyButtonPoint.y }]
+    });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: []
+    });
+  } else {
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: copyButtonPoint.x,
+      y: copyButtonPoint.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1
+    });
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: copyButtonPoint.x,
+      y: copyButtonPoint.y,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1
+    });
+  }
+  const copyResult = await evaluate(cdp, `(async () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const status = document.getElementById('copy-status').textContent.trim();
+    if (status) return {
+      status,
+      fallbackVisible: !document.getElementById('copy-fallback').hidden,
+      fallbackContainsInput: document.getElementById('copy-fallback-text').value.includes('WKH TXLFN')
+    };
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return { status: '' };
+  })()`);
+  if (!copyResult.status) {
+    throw new Error('Copy summary did not report a result.');
+  }
+  if (copyResult.fallbackContainsInput) {
+    throw new Error(`Copy fallback exposed the input text: ${JSON.stringify(copyResult)}`);
+  }
+  if (!copyResult.status.includes('コピーしました') && !copyResult.fallbackVisible) {
+    throw new Error(`Copy failure did not expose the manual fallback: ${JSON.stringify(copyResult)}`);
+  }
+  if (url.startsWith('http') && !copyResult.status.includes('コピーしました')) {
+    throw new Error(`HTTP clipboard copy failed: ${JSON.stringify(copyResult)}`);
+  }
+  await evaluate(cdp, `(() => {
+    document.getElementById('tab1-button').click();
+    document.getElementById('copy-status').textContent = '';
+    window.scrollTo(0, 0);
+    return true;
+  })()`);
 
   if (screenshot) {
     await evaluate(cdp, 'window.scrollTo(0, 0)');
@@ -197,13 +289,13 @@ try {
     await capture(cdp, path.join(assetsDirectory, 'screenshot.png'));
     await evaluate(cdp, `(() => {
       document.getElementById('tab2-button').click();
-      document.getElementById('heatmap-heading').scrollIntoView({ block: 'start' });
+      document.getElementById('rank-heading').scrollIntoView({ block: 'start' });
       return true;
     })()`);
     await delay(150);
     await capture(cdp, path.join(assetsDirectory, 'screenshot1.png'));
     await evaluate(cdp, `(() => {
-      document.getElementById('rare-heading').scrollIntoView({ block: 'start' });
+      document.getElementById('sensitivity-heading').scrollIntoView({ block: 'start' });
       return true;
     })()`);
     await delay(150);
@@ -220,6 +312,21 @@ try {
     const modalOpened = !modal.hidden && document.activeElement.classList.contains('modal-close');
     modal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     const modalClosed = modal.hidden && document.activeElement.id === 'formula-help-btn';
+    const adjustedThreshold = Number(document.querySelector('.sensitivity-table tbody tr[data-factor="1"]')?.dataset.threshold);
+    const adjustment = document.getElementById('sensitivity-adjust');
+    adjustment.checked = false;
+    adjustment.dispatchEvent(new Event('input', { bubbles: true }));
+    const unadjustedThreshold = Number(document.querySelector('.sensitivity-table tbody tr[data-factor="1"]')?.dataset.threshold);
+    const sensitivityRows = document.querySelectorAll('.sensitivity-table tbody tr').length;
+    const contributionHeading = document.getElementById('contribution-heading').textContent;
+    const sensitivityN = document.getElementById('sensitivity-n');
+    sensitivityN.value = '0';
+    sensitivityN.dispatchEvent(new Event('input', { bubbles: true }));
+    const invalidSensitivityMessage = document.getElementById('sensitivity-message').textContent;
+    const invalidSensitivityRows = document.querySelectorAll('.sensitivity-table tbody tr').length;
+    document.getElementById('sensitivity-reset').click();
+    const resetSensitivityRows = document.querySelectorAll('.sensitivity-table tbody tr').length;
+    const resetSensitivityN = sensitivityN.value;
     const input = document.getElementById('cipher-input');
     input.value += 'A';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -230,7 +337,16 @@ try {
       modalClosed,
       modalHiddenAfterEscape: modal.hidden,
       activeAfterEscape: document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName,
+      adjustedThreshold,
+      unadjustedThreshold,
+      sensitivityRows,
+      contributionHeading,
+      invalidSensitivityMessage,
+      invalidSensitivityRows,
+      resetSensitivityRows,
+      resetSensitivityN,
       staleCards: document.querySelectorAll('.shift-card').length,
+      copyDisabledAfterInput: document.getElementById('copy-summary-btn').disabled,
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth
     };
@@ -242,14 +358,28 @@ try {
   if (!interaction.modalOpened || !interaction.modalClosed) {
     throw new Error(`Modal focus behavior failed: ${JSON.stringify(interaction)}`);
   }
+  if (
+    interaction.sensitivityRows !== 3
+    || interaction.unadjustedThreshold > interaction.adjustedThreshold
+    || !interaction.contributionHeading.includes('contributions')
+    || !interaction.invalidSensitivityMessage
+    || interaction.invalidSensitivityRows !== 0
+    || interaction.resetSensitivityRows !== 3
+    || interaction.resetSensitivityN !== '138'
+  ) {
+    throw new Error(`Phase 2 analysis controls failed: ${JSON.stringify(interaction)}`);
+  }
   if (interaction.staleCards !== 0) {
     throw new Error(`Stale cards were not cleared: ${interaction.staleCards}`);
+  }
+  if (!interaction.copyDisabledAfterInput) {
+    throw new Error(`Copy summary remained enabled after input invalidation: ${JSON.stringify(interaction)}`);
   }
   if (interaction.documentWidth > interaction.viewportWidth) {
     throw new Error(`Page overflow after interaction: ${interaction.documentWidth} > ${interaction.viewportWidth}`);
   }
 
-  process.stdout.write(`${JSON.stringify({ url, width, height, generated, interaction })}\n`);
+  process.stdout.write(`${JSON.stringify({ url, width, height, generated, copyResult, interaction })}\n`);
   await cdp.send('Browser.close');
 } finally {
   if (!browser.killed) browser.kill();

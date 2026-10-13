@@ -61,6 +61,29 @@ test('input mutation invalidates stale analysis', () => {
   assert.ok(handlerBody.includes('clearAnalysis()'));
 });
 
+test('analysis view exposes contribution evidence and the sensitivity lab', () => {
+  assert.ok(html.includes('id="chi-contribution-results"'));
+  assert.ok(html.includes('id="sensitivity-form"'));
+  assert.ok(html.includes('id="sensitivity-adjust"'));
+  assert.ok(html.includes('id="copy-summary-btn"'));
+  assert.ok(html.includes('id="copy-fallback-text"'));
+});
+
+test('sensitivity inputs rerender on every input mutation', () => {
+  assert.ok(script.includes("document.getElementById('sensitivity-form').addEventListener('input', renderSensitivityLab)"));
+  const renderBody = script.match(/function renderDynamicResults\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(renderBody.includes('renderContributionResults()'));
+  assert.ok(renderBody.includes('renderSensitivityLab()'));
+  assert.ok(renderBody.includes('renderCopyControls()'));
+});
+
+test('copied analysis summary is built from structured results rather than plaintext', () => {
+  const summaryBody = script.match(/function buildAnalysisSummaryText\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(summaryBody.includes('Core.createAnalysisSummary'));
+  assert.ok(!summaryBody.includes('normalizedText'));
+  assert.ok(!summaryBody.includes('cipher-input'));
+});
+
 test('README files exist for both languages', () => {
   assert.ok(fs.existsSync(path.join(root, 'README.md')));
   assert.ok(fs.existsSync(path.join(root, 'README.en.md')));

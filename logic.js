@@ -197,13 +197,46 @@
       return Number.POSITIVE_INFINITY;
     }
 
-    let score = 0;
-    for (const letter of ALPHABET) {
-      const expectedCount = textLength * expectedFrequencies[letter];
-      const difference = (freq[letter] ?? 0) - expectedCount;
-      score += (difference * difference) / expectedCount;
+    return calculateChiSquareContributions(freq, textLength, expectedFrequencies)
+      .reduce((score, item) => score + item.contribution, 0);
+  }
+
+  function calculateChiSquareContributions(
+    freq,
+    textLength,
+    expectedFrequencies = ENGLISH_FREQUENCIES
+  ) {
+    if (!Number.isInteger(textLength) || textLength <= 0) {
+      return [];
     }
-    return score;
+
+    return [...ALPHABET].map((letter) => {
+      const observed = freq[letter] ?? 0;
+      const expected = textLength * expectedFrequencies[letter];
+      const difference = observed - expected;
+      return {
+        letter,
+        observed,
+        expected,
+        difference,
+        contribution: (difference * difference) / expected
+      };
+    });
+  }
+
+  function getTopChiSquareContributions(row, limit = 5) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > ALPHABET.length) {
+      throw new RangeError('limit must be an integer from 1 to 26');
+    }
+
+    return calculateChiSquareContributions(row.freq, row.text.length)
+      .sort((a, b) => {
+        const contributionDifference = b.contribution - a.contribution;
+        return contributionDifference === 0
+          ? a.letter.localeCompare(b.letter)
+          : contributionDifference;
+      })
+      .slice(0, limit);
   }
 
   function rankShiftsByChiSquare(rows) {
@@ -241,6 +274,77 @@
     }, { within: [], flagged: [] });
   }
 
+  function createThresholdSensitivitySeries({
+    sampleSize,
+    pMax = P_MAX,
+    familyAlpha = FAMILY_ALPHA,
+    comparisonCount = LOW_FREQ_LETTERS.length,
+    useBonferroni = true
+  }) {
+    if (!Number.isInteger(sampleSize) || sampleSize < 1 || sampleSize > MAX_INPUT_LETTERS) {
+      throw new RangeError(`sampleSize must be an integer from 1 to ${MAX_INPUT_LETTERS}`);
+    }
+    if (typeof useBonferroni !== 'boolean') {
+      throw new TypeError('useBonferroni must be a boolean');
+    }
+    if (!Number.isInteger(comparisonCount) || comparisonCount < 1 || comparisonCount > ALPHABET.length) {
+      throw new RangeError('comparisonCount must be an integer from 1 to 26');
+    }
+
+    const factors = [0.5, 1, 2];
+    const seenSizes = new Set();
+    const adjustmentCount = useBonferroni ? comparisonCount : 1;
+    const series = [];
+
+    for (const factor of factors) {
+      const n = Math.max(1, Math.min(MAX_INPUT_LETTERS, Math.round(sampleSize * factor)));
+      if (seenSizes.has(n)) continue;
+      seenSizes.add(n);
+      series.push({
+        factor,
+        sampleSize: n,
+        requestedComparisonCount: comparisonCount,
+        useBonferroni,
+        ...calculateRareLetterThreshold(n, pMax, familyAlpha, adjustmentCount)
+      });
+    }
+    return series;
+  }
+
+  function createAnalysisSummary(rows, thresholdInfo, topCount = 5) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new RangeError('rows must contain analyzed shift results');
+    }
+    if (!thresholdInfo || !Number.isInteger(thresholdInfo.n) || thresholdInfo.n < 1) {
+      throw new TypeError('thresholdInfo must include a positive integer n');
+    }
+    if (!Number.isInteger(topCount) || topCount < 1 || topCount > rows.length) {
+      throw new RangeError('topCount must fit within the analyzed rows');
+    }
+
+    const groups = partitionAnalyzedRows(rows);
+    const topShifts = [...rows]
+      .sort((a, b) => a.chiSquareRank - b.chiSquareRank)
+      .slice(0, topCount)
+      .map((row) => ({
+        rank: row.chiSquareRank,
+        shift: row.shift,
+        chiSquare: row.chiSquare
+      }));
+
+    return {
+      textLength: thresholdInfo.n,
+      pMax: thresholdInfo.pMax,
+      familyAlpha: thresholdInfo.familyAlpha,
+      comparisonCount: thresholdInfo.comparisonCount,
+      perComparisonAlpha: thresholdInfo.perComparisonAlpha,
+      threshold: thresholdInfo.threshold,
+      withinCount: groups.within.length,
+      flaggedCount: groups.flagged.length,
+      topShifts
+    };
+  }
+
   return Object.freeze({
     ALPHABET,
     LOW_FREQ_LETTERS,
@@ -259,8 +363,12 @@
     getSumLowFreqCount,
     getFlaggedLowFreqLetters,
     calculateChiSquare,
+    calculateChiSquareContributions,
+    getTopChiSquareContributions,
     rankShiftsByChiSquare,
     analyzeRows,
-    partitionAnalyzedRows
+    partitionAnalyzedRows,
+    createThresholdSensitivitySeries,
+    createAnalysisSummary
   });
 }));
