@@ -10,7 +10,7 @@
 
 [日本語](README.md)
 
-**Alphabet Shift Spectrum** is an educational web tool for comparing all 26 alphabet shifts used by a Caesar cipher. From the same input, it shows shifted texts, A-Z counts, a heatmap, a chi-square ranking against reference English letter frequencies, and a rare-letter screen.
+**Alphabet Shift Spectrum** is an educational web tool for comparing all 26 alphabet shifts used by a Caesar cipher. From the same input, it shows shifted texts, A-Z counts, a heatmap, a chi-square ranking with per-letter contributions, and a rare-letter screen. A separate sensitivity lab demonstrates how statistical settings change the threshold.
 
 Neither the ranking nor the screen identifies a correct plaintext or key. Results are particularly unstable for short texts, names, and non-English text, so inspect actual words and context as well.
 
@@ -30,13 +30,13 @@ The tool runs directly in the browser. Input stays in the browser and is not sen
 >
 >*All 26 shifted texts with A-Z counts*
 
->![Frequency heatmap and chi-square ranking](assets/screenshot1.png)
+>![Chi-square ranking and per-letter contributions](assets/screenshot1.png)
 >
->*Frequency heatmap and fit ranking against English letter frequencies*
+>*The five best-ranked shifts and the letters driving χ² for the top three*
 
->![Rare-letter screen](assets/screenshot2.png)
+>![Threshold sensitivity lab](assets/screenshot2.png)
 >
->*Rare-letter screen using an exact upper binomial tail and a multiple-comparison adjustment*
+>*Exact-binomial thresholds under different sample sizes and multiple-comparison settings*
 
 ---
 
@@ -53,8 +53,11 @@ The tool runs directly in the browser. Input stays in the browser and is not sen
 
 - 26-shift by 26-letter frequency heatmap
 - Five smallest chi-square values against a reference English distribution
+- Observed counts, expected counts, differences, and the five largest χ² contributions for each of the top three shifts
 - Rare-letter screen for J, K, Q, X, and Z
 - Exact upper binomial tail threshold with a Bonferroni adjustment
+- Threshold sensitivity lab for `n`, `p`, `α`, comparison count, and adjustment state
+- Result-summary copy without the input text, with a manual fallback when clipboard access is unavailable
 - Complete Japanese and English interface
 
 Tabs without implemented features are not shown.
@@ -66,8 +69,10 @@ Tabs without implemented features are not shown.
 1. Enter ciphertext. Only ASCII letters A-Z are analyzed; spaces, digits, punctuation, and other characters are removed.
 2. Select “Generate 26 shifts.”
 3. In “Shift list,” compare the text, chi-square rank, and rare-letter state.
-4. In “Analysis,” review the heatmap, top five ranks, threshold, and screen results.
-5. Do not decide from a rank alone; inspect readable words, grammar, and context.
+4. In “Analysis,” review the heatmap, top five ranks, per-letter contributions for the top three, threshold, and screen results.
+5. Optionally change the sensitivity-lab settings to compare the effects of sample size and multiple-comparison adjustment.
+6. “Copy result summary” shares conditions and results without including the input text.
+7. Do not decide from a rank alone; inspect readable words, grammar, and context.
 
 Changing the input clears stale results. Generate again for the current input. The limit is 20,000 valid letters.
 
@@ -87,7 +92,7 @@ For each shift, A-Z counts are compared with reference English letter frequencie
 χ² = Σ (observed count - expected count)² / expected count
 ```
 
-A smaller value is closer to the reference distribution, but the smallest value is not necessarily the correct shift. Short texts and specialized vocabulary can substantially change the ranking.
+A smaller value is closer to the reference distribution, but the smallest value is not necessarily the correct shift. Short texts and specialized vocabulary can substantially change the ranking. For the top three shifts, the tool sorts the per-letter terms by contribution so that the observations driving the total χ² value can be inspected.
 
 ### Rare-letter screen
 
@@ -102,6 +107,12 @@ If any of the five letters occurs at least `k` times, the shift is flagged for r
 
 The binomial standard deviation is `√(np(1-p))`. The tool does not use a normal approximation for the threshold; it numerically evaluates the exact discrete distribution. Because five letters are checked, each upper-tail comparison uses the Bonferroni-adjusted level `α / 5`.
 
+### Threshold sensitivity lab
+
+For a base sample size `n`, the lab calculates thresholds at half, base, and double sample sizes using the same `p`, `α`, and comparison count. With Bonferroni enabled, each check uses `α / m`; without it, each check uses `α` directly.
+
+Lab settings do not change the main rare-letter screen. The lab also does not validate whether a user-selected `p` or `α` is appropriate for the text.
+
 ---
 
 ## ⚠️ Interpretation and limitations
@@ -111,6 +122,8 @@ The binomial standard deviation is `√(np(1-p))`. The tool does not use a norma
 - The calculation uses a simplified English model with independent letters and a fixed probability.
 - Natural-language letters are dependent, and observed frequencies vary with style, domain, and names.
 - The chi-square ranking does not prove naturalness, meaning, cipher type, or the correct key.
+- A large per-letter contribution shows a large gap from the reference frequency, not that a shift is correct or wrong.
+- User-selected `p` and `α` values in the sensitivity lab are educational trial conditions and may not be suitable for the text.
 - For a cipher other than a Caesar shift, none of the 26 rows may be the correct plaintext.
 
 This is an educational tool for comparing diagnostic evidence. It cannot prove or automatically determine a decryption.
@@ -122,8 +135,9 @@ This is an educational tool for comparing diagnostic evidence. It cannot prove o
 ### Uses specific to this tool
 
 - **Observe disagreement between diagnostics:** for a short input such as `KHOOR ZRUOG`, readable `Shift 23` may not rank first by chi-square, demonstrating that frequency alone cannot determine meaning.
-- **Compare sample size and threshold:** the change from `k = 6` at 100 letters to `k = 19` at 1,000 letters shows why a fixed count is not appropriate.
+- **Compare sample size and threshold:** place half, base, and double `n` side by side in the sensitivity lab to see why a fixed count is not appropriate.
 - **Learn about multiple comparisons:** the method panel explains why a five-letter screen divides `α` by five.
+- **Trace why a shift ranks highly:** inspect the top per-letter contributions to see how gaps such as an observed Q or X count increase the total χ² value.
 - **Watch a frequency distribution rotate:** across all 26 shifts, peaks move between heatmap columns while counts are preserved.
 
 ### General uses

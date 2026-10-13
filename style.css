@@ -90,7 +90,7 @@ a:hover {
   color: var(--color-primary-dark);
 }
 
-button, textarea {
+button, input, textarea {
   font: inherit;
 }
 
@@ -103,12 +103,20 @@ button {
 }
 
 button:focus-visible,
+input:focus-visible,
 textarea:focus-visible,
 .freq-table-wrapper:focus-visible,
+.contribution-table-wrapper:focus-visible,
+.sensitivity-table-wrapper:focus-visible,
 .heatmap-container:focus-visible,
 a:focus-visible {
   outline: 3px solid #0ea5e9;
   outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 textarea {
@@ -161,6 +169,15 @@ textarea {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.clipboard-buffer {
+  position: fixed;
+  inset-inline-start: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 .placeholder-message {

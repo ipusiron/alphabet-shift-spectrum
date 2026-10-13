@@ -64,11 +64,59 @@
       </section>
 
       <section class="analysis-card rank-section" aria-labelledby="rank-heading">
-        <h2 id="rank-heading" data-i18n="chiHeading">英語文字頻度への適合順位</h2>
+        <div class="analysis-heading-row">
+          <h2 id="rank-heading" data-i18n="chiHeading">英語文字頻度への適合順位</h2>
+          <button id="copy-summary-btn" class="btn-secondary" type="button" data-i18n="copySummary" disabled>結果概要をコピー</button>
+        </div>
         <p class="section-description" data-i18n="chiDescription">χ²が小さいほど、基準とした一般的な英語文字頻度に近いことを示します。順位は平文の正しさを保証しません。</p>
+        <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+        <div id="copy-fallback" class="copy-fallback" hidden>
+          <label for="copy-fallback-text" data-i18n="copyFallbackLabel">手動コピー用の結果概要</label>
+          <textarea id="copy-fallback-text" rows="9" readonly></textarea>
+          <p data-i18n="copyFallbackHelp">概要を選択済みです。Ctrl+Cまたは端末のコピー操作を使ってください。</p>
+        </div>
         <div id="rank-results" class="rank-results">
           <p class="placeholder-message" data-i18n="chiPlaceholder">シフト生成後に上位候補が表示されます。</p>
         </div>
+
+        <section class="contribution-subsection" aria-labelledby="contribution-heading">
+          <h3 id="contribution-heading" data-i18n="contributionHeading">上位3候補のχ²寄与</h3>
+          <p class="section-description" data-i18n="contributionDescription">χ²への寄与が大きい5文字を候補ごとに示します。値が大きい文字ほど、観測頻度と基準英語頻度の差を強く押し上げています。</p>
+          <div id="chi-contribution-results" class="contribution-grid">
+            <p class="placeholder-message" data-i18n="contributionPlaceholder">シフト生成後に文字別の寄与が表示されます。</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="analysis-card sensitivity-section" aria-labelledby="sensitivity-heading">
+        <h2 id="sensitivity-heading" data-i18n="sensitivityHeading">閾値感度ラボ</h2>
+        <p id="sensitivity-description" class="section-description" data-i18n="sensitivityDescription">標本数、上限頻度、有意水準、比較数を変え、厳密二項上側確率から得られる基準値を比較します。通常分析とは独立した学習用の試算です。</p>
+        <form id="sensitivity-form" class="sensitivity-controls" novalidate>
+          <label class="form-field" for="sensitivity-n">
+            <span data-i18n="sensitivitySampleSize">基準の標本数 n</span>
+            <input id="sensitivity-n" type="number" min="1" max="20000" step="1" value="100" inputmode="numeric" aria-describedby="sensitivity-description">
+          </label>
+          <label class="form-field" for="sensitivity-p">
+            <span data-i18n="sensitivityProbability">上限頻度 p</span>
+            <input id="sensitivity-p" type="number" min="0.00001" max="0.5" step="0.00001" value="0.00772" inputmode="decimal" aria-describedby="sensitivity-description">
+          </label>
+          <label class="form-field" for="sensitivity-alpha">
+            <span data-i18n="sensitivityAlpha">全体有意水準 α</span>
+            <input id="sensitivity-alpha" type="number" min="0.000001" max="0.2" step="0.000001" value="0.003" inputmode="decimal" aria-describedby="sensitivity-description">
+          </label>
+          <label class="form-field" for="sensitivity-comparisons">
+            <span data-i18n="sensitivityComparisons">比較する文字数 m</span>
+            <input id="sensitivity-comparisons" type="number" min="1" max="26" step="1" value="5" inputmode="numeric" aria-describedby="sensitivity-description">
+          </label>
+          <label class="checkbox-field" for="sensitivity-adjust">
+            <input id="sensitivity-adjust" type="checkbox" checked>
+            <span data-i18n="sensitivityAdjustment">Bonferroni補正を適用（α / m）</span>
+          </label>
+          <button id="sensitivity-reset" class="btn-secondary sensitivity-reset" type="button" data-i18n="sensitivityReset">標準設定に戻す</button>
+        </form>
+        <p id="sensitivity-message" class="sensitivity-message" role="status" aria-live="polite"></p>
+        <div id="sensitivity-results" class="sensitivity-results"></div>
+        <p class="method-limit" data-i18n="sensitivityLimit">設定を変えた結果は教材上の比較です。入力したpやαが対象文章に適切であることや、暗号文の正解を示すものではありません。</p>
       </section>
 
       <section class="analysis-card filter-section" aria-labelledby="rare-heading">
