@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -28,6 +28,8 @@ const sample = [
 
 await access(browserPath);
 const profile = await mkdtemp(path.join(os.tmpdir(), 'day107-browser-'));
+const downloads = path.join(profile, 'downloads');
+await mkdir(downloads, { recursive: true });
 const browser = spawn(browserPath, [
   '--headless=new',
   '--disable-gpu',
@@ -133,6 +135,10 @@ try {
   await cdp.opened;
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
+  await cdp.send('Browser.setDownloadBehavior', {
+    behavior: 'allow',
+    downloadPath: downloads
+  });
   if (url.startsWith('http')) {
     await cdp.send('Browser.grantPermissions', {
       origin: new URL(url).origin,
@@ -275,7 +281,7 @@ try {
 
   if (screenshot) {
     await evaluate(cdp, 'window.scrollTo(0, 0)');
-    await delay(150);
+    await delay(750);
     await capture(cdp, path.resolve(screenshot));
   }
 
@@ -285,21 +291,144 @@ try {
       window.scrollTo(0, 0);
       return true;
     })()`);
-    await delay(150);
+    await delay(750);
     await capture(cdp, path.join(assetsDirectory, 'screenshot.png'));
     await evaluate(cdp, `(() => {
       document.getElementById('tab2-button').click();
       document.getElementById('rank-heading').scrollIntoView({ block: 'start' });
       return true;
     })()`);
-    await delay(150);
+    await delay(750);
     await capture(cdp, path.join(assetsDirectory, 'screenshot1.png'));
     await evaluate(cdp, `(() => {
       document.getElementById('sensitivity-heading').scrollIntoView({ block: 'start' });
       return true;
     })()`);
-    await delay(150);
+    await delay(750);
     await capture(cdp, path.join(assetsDirectory, 'screenshot2.png'));
+  }
+
+  const phase3 = await evaluate(cdp, `(async () => {
+    document.getElementById('tab2-button').click();
+    document.getElementById('monte-carlo-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true
+    }));
+    const monteCarloText = document.getElementById('monte-carlo-result').textContent;
+    const monteCarloValues = document.querySelectorAll('.monte-carlo-condition, .monte-carlo-value').length;
+
+    const core = globalThis.AlphabetShiftCore;
+    const normalized = core.normalizeText(${JSON.stringify(sample)});
+    const profile = core.createReferenceProfile('english');
+    const thresholdInfo = {
+      ...core.calculateRareLetterThreshold(normalized.length),
+      n: normalized.length
+    };
+    const analyzedRows = core.analyzeRows(
+      core.generateAllShifts(normalized),
+      thresholdInfo.threshold,
+      profile.frequencies
+    );
+    const sensitivitySettings = {
+      sampleSize: Number(document.getElementById('sensitivity-n').value),
+      pMax: Number(document.getElementById('sensitivity-p').value),
+      familyAlpha: Number(document.getElementById('sensitivity-alpha').value),
+      comparisonCount: Number(document.getElementById('sensitivity-comparisons').value),
+      useBonferroni: document.getElementById('sensitivity-adjust').checked
+    };
+    const record = core.createAnalysisRecord({
+      baseFrequency: core.calculateFrequency(normalized),
+      analyzedRows,
+      thresholdInfo,
+      referenceProfile: profile,
+      sensitivitySettings
+    });
+    const recordJson = JSON.stringify(record);
+    const fileInput = document.getElementById('record-file');
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([recordJson], 'analysis.json', { type: 'application/json' }));
+    fileInput.files = transfer.files;
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      if (document.querySelectorAll('.record-rank-list li').length === 5) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const recordLoadedStatus = document.getElementById('record-status').textContent;
+
+    const profileSelect = document.getElementById('profile-select');
+    profileSelect.value = 'custom';
+    profileSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const customFieldsVisible = !document.getElementById('custom-profile-fields').hidden;
+    const customCorpus = document.getElementById('profile-corpus');
+    customCorpus.value = 'ETAOIN SHRDLU ETAOIN SHRDLU CUSTOM REFERENCE CORPUS';
+    customCorpus.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('generate-btn').click();
+    const customProfileLabel = document.getElementById('active-profile').textContent;
+    const customCards = document.querySelectorAll('.shift-card').length;
+
+    profileSelect.value = 'uniform';
+    profileSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('generate-btn').click();
+    const uniformScores = [...document.querySelectorAll('.rank-score')].map((item) => item.textContent);
+    const saveEnabled = !document.getElementById('record-save-btn').disabled;
+    document.getElementById('record-save-btn').click();
+
+    return {
+      monteCarloText,
+      monteCarloValues,
+      recordRows: document.querySelectorAll('.record-rank-list li').length,
+      recordLoadedStatus,
+      recordStatus: document.getElementById('record-status').textContent,
+      recordTextIncludesPlaintext: recordJson.includes(normalized),
+      customFieldsVisible,
+      customProfileLabel,
+      customCards,
+      uniformUniqueScores: new Set(uniformScores).size,
+      uniformProfileLabel: document.getElementById('active-profile').textContent,
+      saveEnabled,
+      monteCarloClearedAfterRegeneration: document.querySelectorAll('.monte-carlo-value').length === 0,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth
+    };
+  })()`);
+
+  let downloadedRecord = null;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const files = await readdir(downloads);
+    const jsonFile = files.find((file) => file.endsWith('.json'));
+    if (jsonFile) {
+      downloadedRecord = JSON.parse(await readFile(path.join(downloads, jsonFile), 'utf8'));
+      break;
+    }
+    await delay(50);
+  }
+  phase3.downloadedRecord = Boolean(
+    downloadedRecord
+    && downloadedRecord.schema === 'alphabet-shift-spectrum-analysis'
+    && downloadedRecord.version === 1
+    && downloadedRecord.inputAggregate?.letterCount === 138
+    && !JSON.stringify(downloadedRecord).includes(sample.replace(/[^A-Z]/g, ''))
+  );
+
+  if (
+    phase3.monteCarloValues !== 4
+    || !phase3.monteCarloText.includes('厳密値')
+    || phase3.recordRows !== 5
+    || !phase3.recordLoadedStatus.includes('再計算')
+    || phase3.recordTextIncludesPlaintext
+    || !phase3.customFieldsVisible
+    || !phase3.customProfileLabel.includes('利用者コーパス')
+    || phase3.customCards !== 26
+    || phase3.uniformUniqueScores !== 1
+    || !phase3.uniformProfileLabel.includes('均等分布')
+    || !phase3.saveEnabled
+    || !phase3.downloadedRecord
+    || !phase3.monteCarloClearedAfterRegeneration
+  ) {
+    throw new Error(`Phase 3 controls failed: ${JSON.stringify(phase3)}`);
+  }
+  if (phase3.documentWidth > phase3.viewportWidth) {
+    throw new Error(`Phase 3 page overflow: ${phase3.documentWidth} > ${phase3.viewportWidth}`);
   }
 
   const interaction = await evaluate(cdp, `(() => {
@@ -379,7 +508,7 @@ try {
     throw new Error(`Page overflow after interaction: ${interaction.documentWidth} > ${interaction.viewportWidth}`);
   }
 
-  process.stdout.write(`${JSON.stringify({ url, width, height, generated, copyResult, interaction })}\n`);
+  process.stdout.write(`${JSON.stringify({ url, width, height, generated, copyResult, phase3, interaction })}\n`);
   await cdp.send('Browser.close');
 } finally {
   if (!browser.killed) browser.kill();

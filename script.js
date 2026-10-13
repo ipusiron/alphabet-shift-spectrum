@@ -18,7 +18,12 @@
     messageVars: {},
     messageType: 'info',
     copyStatusKey: '',
-    copyFallbackVisible: false
+    copyFallbackVisible: false,
+    referenceProfile: Core.createReferenceProfile('english'),
+    monteCarloResult: null,
+    monteCarloStatusKey: '',
+    importedRecord: null,
+    recordStatusKey: ''
   };
   let modalReturnFocus = null;
 
@@ -87,6 +92,49 @@
     count.textContent = t('charCount', { count: normalizedLength, max: Core.MAX_INPUT_LETTERS });
     count.classList.toggle('over-limit', normalizedLength > Core.MAX_INPUT_LETTERS);
     return normalizedLength;
+  }
+
+  function getProfileLabel(profileId) {
+    const keys = {
+      english: 'profileEnglish',
+      uniform: 'profileUniform',
+      custom: 'profileCustom'
+    };
+    return t(keys[profileId] ?? 'profileEnglish');
+  }
+
+  function updateProfileControls() {
+    const profileId = document.getElementById('profile-select').value;
+    const customFields = document.getElementById('custom-profile-fields');
+    customFields.hidden = profileId !== 'custom';
+    const corpusLength = Core.normalizeText(document.getElementById('profile-corpus').value).length;
+    const count = document.getElementById('profile-corpus-count');
+    count.textContent = t('charCount', { count: corpusLength, max: Core.MAX_INPUT_LETTERS });
+    count.classList.toggle('over-limit', corpusLength > Core.MAX_INPUT_LETTERS);
+    const descriptionKeys = {
+      english: 'profileEnglishDescription',
+      uniform: 'profileUniformDescription',
+      custom: 'profileCustomDescription'
+    };
+    document.getElementById('profile-description').textContent = t(descriptionKeys[profileId]);
+  }
+
+  function readReferenceProfile() {
+    const profileId = document.getElementById('profile-select').value;
+    const corpus = document.getElementById('profile-corpus').value;
+    return Core.createReferenceProfile(profileId, corpus);
+  }
+
+  function renderActiveProfile() {
+    const existing = document.getElementById('active-profile');
+    if (!existing) return;
+    const profile = appState.referenceProfile;
+    existing.textContent = profile.id === 'custom'
+      ? t('profileCustomActive', {
+        profile: getProfileLabel(profile.id),
+        count: profile.corpusLetterCount
+      })
+      : t('profileActive', { profile: getProfileLabel(profile.id) });
   }
 
   function showMessage(key, variables = {}, type = 'info') {
@@ -315,7 +363,11 @@
       table.appendChild(thead);
 
       const tbody = document.createElement('tbody');
-      for (const item of Core.getTopChiSquareContributions(row, 5)) {
+      for (const item of Core.getTopChiSquareContributions(
+        row,
+        5,
+        appState.referenceProfile.frequencies
+      )) {
         const dataRow = document.createElement('tr');
         const letter = createElement('th', '', item.letter);
         letter.scope = 'row';
@@ -396,6 +448,21 @@
     document.getElementById('sensitivity-adjust').checked = true;
   }
 
+  function isSensitivityConfigValid(config) {
+    return Number.isInteger(config.sampleSize)
+      && config.sampleSize >= 1
+      && config.sampleSize <= Core.MAX_INPUT_LETTERS
+      && Number.isFinite(config.pMax)
+      && config.pMax > 0
+      && config.pMax <= 0.5
+      && Number.isFinite(config.familyAlpha)
+      && config.familyAlpha > 0
+      && config.familyAlpha <= 0.2
+      && Number.isInteger(config.comparisonCount)
+      && config.comparisonCount >= 1
+      && config.comparisonCount <= Core.ALPHABET.length;
+  }
+
   function getSensitivityScaleKey(factor) {
     if (factor < 1) return 'sensitivityHalf';
     if (factor > 1) return 'sensitivityDouble';
@@ -409,18 +476,8 @@
     message.textContent = '';
 
     const config = readSensitivityInputs();
-    const valid = Number.isInteger(config.sampleSize)
-      && config.sampleSize >= 1
-      && config.sampleSize <= Core.MAX_INPUT_LETTERS
-      && Number.isFinite(config.pMax)
-      && config.pMax > 0
-      && config.pMax <= 0.5
-      && Number.isFinite(config.familyAlpha)
-      && config.familyAlpha > 0
-      && config.familyAlpha <= 0.2
-      && Number.isInteger(config.comparisonCount)
-      && config.comparisonCount >= 1
-      && config.comparisonCount <= Core.ALPHABET.length;
+    const valid = isSensitivityConfigValid(config);
+    document.getElementById('monte-carlo-run').disabled = !valid;
 
     if (!valid) {
       message.textContent = t('sensitivityInvalid');
@@ -485,11 +542,98 @@
     container.appendChild(wrapper);
   }
 
+  function renderMonteCarloResult() {
+    const container = document.getElementById('monte-carlo-result');
+    container.replaceChildren();
+    if (!appState.monteCarloResult) {
+      container.appendChild(createElement(
+        'p',
+        appState.monteCarloStatusKey ? 'input-message error' : 'placeholder-message',
+        t(appState.monteCarloStatusKey || 'monteCarloPlaceholder')
+      ));
+      return;
+    }
+
+    const result = appState.monteCarloResult;
+    const list = createElement('dl', 'monte-carlo-values');
+    const rows = [
+      t('monteCarloCondition', {
+        n: result.sampleSize,
+        p: formatProbability(result.p),
+        threshold: result.threshold,
+        seed: result.seed
+      }),
+      t('monteCarloExact', {
+        threshold: result.threshold,
+        value: formatProbability(result.exact)
+      }),
+      t('monteCarloEstimate', {
+        value: formatProbability(result.estimate),
+        hits: result.exceedances,
+        trials: result.trials
+      }),
+      t('monteCarloError', { value: formatProbability(result.absoluteError) })
+    ];
+    rows.forEach((textValue, index) => {
+      const item = createElement('div', index === 0 ? 'monte-carlo-condition' : 'monte-carlo-value');
+      item.appendChild(createElement('span', '', textValue));
+      list.appendChild(item);
+    });
+    container.appendChild(list);
+  }
+
+  function handleMonteCarloSubmit(event) {
+    event.preventDefault();
+    const config = readSensitivityInputs();
+    const trials = Number(document.getElementById('monte-carlo-trials').value);
+    const seed = Number(document.getElementById('monte-carlo-seed').value);
+    if (
+      !isSensitivityConfigValid(config)
+      || !Number.isInteger(trials)
+      || trials < 100
+      || trials > 20000
+      || !Number.isInteger(seed)
+      || seed < 0
+      || seed > 0xffffffff
+    ) {
+      appState.monteCarloResult = null;
+      appState.monteCarloStatusKey = 'monteCarloInvalid';
+      renderMonteCarloResult();
+      return;
+    }
+
+    try {
+      const base = Core.createThresholdSensitivitySeries(config)
+        .find((item) => item.factor === 1);
+      appState.monteCarloResult = Core.simulateBinomialUpperTail({
+        sampleSize: base.sampleSize,
+        p: config.pMax,
+        threshold: base.threshold,
+        trials,
+        seed
+      });
+      appState.monteCarloStatusKey = '';
+    } catch {
+      appState.monteCarloResult = null;
+      appState.monteCarloStatusKey = 'monteCarloInvalid';
+    }
+    renderMonteCarloResult();
+  }
+
+  function handleSensitivityMutation() {
+    appState.monteCarloResult = null;
+    appState.monteCarloStatusKey = '';
+    renderSensitivityLab();
+    renderMonteCarloResult();
+    renderRecordSection();
+  }
+
   function buildAnalysisSummaryText() {
     const summary = Core.createAnalysisSummary(appState.analyzedRows, appState.thresholdInfo, 5);
     const lines = [
       t('summaryTitle'),
       t('summaryLength', { count: summary.textLength }),
+      t('summaryProfile', { profile: getProfileLabel(appState.referenceProfile.id) }),
       t('summaryModel', {
         p: summary.pMax,
         alpha: summary.familyAlpha,
@@ -562,6 +706,118 @@
     }
   }
 
+  function buildCurrentAnalysisRecord() {
+    if (appState.analyzedRows.length === 0 || !appState.thresholdInfo) return null;
+    const sensitivitySettings = readSensitivityInputs();
+    if (!isSensitivityConfigValid(sensitivitySettings)) return null;
+    return Core.createAnalysisRecord({
+      baseFrequency: Core.calculateFrequency(appState.normalizedText),
+      analyzedRows: appState.analyzedRows,
+      thresholdInfo: appState.thresholdInfo,
+      referenceProfile: appState.referenceProfile,
+      sensitivitySettings
+    });
+  }
+
+  function renderRecordSection() {
+    const saveButton = document.getElementById('record-save-btn');
+    const clearButton = document.getElementById('record-clear-btn');
+    const status = document.getElementById('record-status');
+    const container = document.getElementById('record-results');
+    const canSave = appState.analyzedRows.length > 0
+      && isSensitivityConfigValid(readSensitivityInputs());
+    saveButton.disabled = !canSave;
+    clearButton.disabled = !appState.importedRecord;
+    status.textContent = appState.recordStatusKey ? t(appState.recordStatusKey) : '';
+    status.className = `record-status ${appState.recordStatusKey === 'recordInvalid' || appState.recordStatusKey === 'recordTooLarge' ? 'error' : 'success'}`;
+    container.replaceChildren();
+
+    if (!appState.importedRecord) {
+      container.appendChild(createElement('p', 'placeholder-message', t('recordPlaceholder')));
+      return;
+    }
+
+    const record = appState.importedRecord.record;
+    const summary = record.result;
+    const article = createElement('article', 'record-summary-card');
+    article.appendChild(createElement('h3', '', t('recordSummary')));
+    const facts = createElement('div', 'record-facts');
+    facts.append(
+      createElement('p', '', t('recordProfile', {
+        profile: getProfileLabel(record.referenceProfile.id)
+      })),
+      createElement('p', '', t('recordThreshold', {
+        count: summary.textLength,
+        threshold: summary.threshold
+      })),
+      createElement('p', '', t('recordCounts', {
+        within: summary.withinCount,
+        flagged: summary.flaggedCount
+      }))
+    );
+    const heading = createElement('h4', '', t('recordTopHeading'));
+    const list = createElement('ol', 'record-rank-list');
+    summary.topShifts.forEach((row) => list.appendChild(createElement('li', '', t('recordTopItem', {
+      rank: row.rank,
+      shift: row.shift,
+      score: formatDecimal(row.chiSquare)
+    }))));
+    article.append(facts, heading, list);
+    container.appendChild(article);
+  }
+
+  function handleSaveRecord() {
+    let record;
+    try {
+      record = buildCurrentAnalysisRecord();
+    } catch {
+      record = null;
+    }
+    if (!record) {
+      appState.recordStatusKey = 'recordInvalid';
+      renderRecordSection();
+      return;
+    }
+    const blob = new Blob([`${JSON.stringify(record, null, 2)}\n`], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = 'alphabet-shift-spectrum-analysis.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    appState.recordStatusKey = 'recordSaved';
+    renderRecordSection();
+  }
+
+  async function handleRecordFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 1024 * 1024) {
+      appState.importedRecord = null;
+      appState.recordStatusKey = 'recordTooLarge';
+      renderRecordSection();
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      appState.importedRecord = Core.parseAnalysisRecord(parsed);
+      appState.recordStatusKey = 'recordLoaded';
+    } catch {
+      appState.importedRecord = null;
+      appState.recordStatusKey = 'recordInvalid';
+    }
+    renderRecordSection();
+  }
+
+  function clearImportedRecord() {
+    appState.importedRecord = null;
+    appState.recordStatusKey = '';
+    renderRecordSection();
+  }
+
   function renderDynamicResults() {
     renderShiftResults();
     renderHeatmap();
@@ -570,7 +826,11 @@
     renderFilterResults();
     updateThresholdDisplay();
     renderSensitivityLab();
+    renderMonteCarloResult();
     renderCopyControls();
+    renderActiveProfile();
+    updateProfileControls();
+    renderRecordSection();
   }
 
   function clearAnalysis() {
@@ -595,15 +855,28 @@
       return;
     }
 
+    let referenceProfile;
+    try {
+      referenceProfile = readReferenceProfile();
+    } catch {
+      clearAnalysis();
+      showMessage('profileCustomRequired', {}, 'error');
+      return;
+    }
+
     const thresholdInfo = Core.calculateRareLetterThreshold(normalizedText.length);
     appState.normalizedText = normalizedText;
+    appState.referenceProfile = referenceProfile;
     appState.thresholdInfo = { ...thresholdInfo, n: normalizedText.length };
     appState.analyzedRows = Core.analyzeRows(
       Core.generateAllShifts(normalizedText),
-      thresholdInfo.threshold
+      thresholdInfo.threshold,
+      referenceProfile.frequencies
     );
     appState.copyStatusKey = '';
     appState.copyFallbackVisible = false;
+    appState.monteCarloResult = null;
+    appState.monteCarloStatusKey = '';
     document.getElementById('sensitivity-n').value = String(normalizedText.length);
     renderDynamicResults();
     showMessage('ready', { count: normalizedText.length }, 'success');
@@ -618,6 +891,27 @@
     }
     if (normalizedLength > Core.MAX_INPUT_LETTERS) {
       showMessage('tooLong', { max: Core.MAX_INPUT_LETTERS }, 'error');
+    }
+  }
+
+  function handleProfileMutation() {
+    const hadAnalysis = appState.analyzedRows.length > 0;
+    updateProfileControls();
+    try {
+      appState.referenceProfile = readReferenceProfile();
+    } catch {
+      const selectedId = document.getElementById('profile-select').value;
+      appState.referenceProfile = {
+        ...Core.createReferenceProfile('english'),
+        id: selectedId,
+        corpusLetterCount: 0
+      };
+    }
+    if (hadAnalysis) {
+      clearAnalysis();
+      showMessage('profileChanged', {}, 'info');
+    } else {
+      renderActiveProfile();
     }
   }
 
@@ -731,12 +1025,26 @@
     document.getElementById('language-toggle').addEventListener('click', switchLanguage);
     document.getElementById('generate-btn').addEventListener('click', handleGenerate);
     document.getElementById('cipher-input').addEventListener('input', handleInputChange);
+    document.getElementById('profile-select').addEventListener('change', handleProfileMutation);
+    document.getElementById('profile-corpus').addEventListener('input', handleProfileMutation);
     document.getElementById('copy-summary-btn').addEventListener('click', handleCopySummary);
+    document.getElementById('record-save-btn').addEventListener('click', handleSaveRecord);
+    document.getElementById('record-load-btn').addEventListener('click', () => {
+      document.getElementById('record-file').click();
+    });
+    document.getElementById('record-file').addEventListener('change', handleRecordFile);
+    document.getElementById('record-clear-btn').addEventListener('click', clearImportedRecord);
     document.getElementById('sensitivity-form').addEventListener('submit', (event) => event.preventDefault());
-    document.getElementById('sensitivity-form').addEventListener('input', renderSensitivityLab);
+    document.getElementById('sensitivity-form').addEventListener('input', handleSensitivityMutation);
     document.getElementById('sensitivity-reset').addEventListener('click', () => {
       setSensitivityDefaults(appState.thresholdInfo?.n ?? 100);
-      renderSensitivityLab();
+      handleSensitivityMutation();
+    });
+    document.getElementById('monte-carlo-form').addEventListener('submit', handleMonteCarloSubmit);
+    document.getElementById('monte-carlo-form').addEventListener('input', () => {
+      appState.monteCarloResult = null;
+      appState.monteCarloStatusKey = '';
+      renderMonteCarloResult();
     });
   }
 

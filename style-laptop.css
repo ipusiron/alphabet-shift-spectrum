@@ -25,6 +25,16 @@ main.container {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.reference-profile-controls {
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 2fr);
+  align-items: end;
+}
+
+.custom-profile-fields,
+.reference-profile-controls .profile-description {
+  grid-column: 1 / -1;
+}
+
 .checkbox-field,
 .sensitivity-reset {
   grid-column: span 2;

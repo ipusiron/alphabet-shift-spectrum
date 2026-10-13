@@ -10,7 +10,7 @@
 
 [日本語](README.md)
 
-**Alphabet Shift Spectrum** is an educational web tool for comparing all 26 alphabet shifts used by a Caesar cipher. From the same input, it shows shifted texts, A-Z counts, a heatmap, a chi-square ranking with per-letter contributions, and a rare-letter screen. A separate sensitivity lab demonstrates how statistical settings change the threshold.
+**Alphabet Shift Spectrum** is an educational web tool for comparing all 26 alphabet shifts used by a Caesar cipher. From the same input, it shows shifted texts, A-Z counts, a heatmap, a chi-square ranking against a selected reference profile, per-letter contributions, and a rare-letter screen. The sensitivity lab compares exact values with a Monte Carlo estimate. Aggregate conditions and results can also be saved and reloaded as JSON without plaintext.
 
 Neither the ranking nor the screen identifies a correct plaintext or key. Results are particularly unstable for short texts, names, and non-English text, so inspect actual words and context as well.
 
@@ -30,13 +30,13 @@ The tool runs directly in the browser. Input stays in the browser and is not sen
 >
 >*All 26 shifted texts with A-Z counts*
 
->![Chi-square ranking and per-letter contributions](assets/screenshot1.png)
+>![Reference profile, chi-square ranking, and contributions](assets/screenshot1.png)
 >
->*The five best-ranked shifts and the letters driving χ² for the top three*
+>*Ranks and per-letter contributions for the selected reference, plus aggregate-only record controls*
 
->![Threshold sensitivity lab](assets/screenshot2.png)
+>![Threshold sensitivity and Monte Carlo comparison](assets/screenshot2.png)
 >
->*Exact-binomial thresholds under different sample sizes and multiple-comparison settings*
+>*Exact-binomial threshold sensitivity and a Monte Carlo estimate for one upper-tail probability*
 
 ---
 
@@ -47,17 +47,19 @@ The tool runs directly in the browser. Input stays in the browser and is not sen
 - All 26 results obtained by adding shifts 0 through 25 to the input
 - A-Z letter counts for every shift
 - “Within screen” and “Flagged” rare-letter states
-- Chi-square rank against reference English letter frequencies
+- Chi-square rank against the selected reference letter frequencies
 
 ### Analysis
 
 - 26-shift by 26-letter frequency heatmap
-- Five smallest chi-square values against a reference English distribution
+- Five smallest chi-square values against general English, a uniform control, or a user-corpus reference
 - Observed counts, expected counts, differences, and the five largest χ² contributions for each of the top three shifts
 - Rare-letter screen for J, K, Q, X, and Z
 - Exact upper binomial tail threshold with a Bonferroni adjustment
 - Threshold sensitivity lab for `n`, `p`, `α`, comparison count, and adjustment state
+- Seeded Monte Carlo comparison with one exact binomial upper-tail probability
 - Result-summary copy without the input text, with a manual fallback when clipboard access is unavailable
+- JSON record of A-Z aggregates, settings, and results without plaintext, shifted strings, or corpus text
 - Complete Japanese and English interface
 
 Tabs without implemented features are not shown.
@@ -67,12 +69,13 @@ Tabs without implemented features are not shown.
 ## 📖 Usage
 
 1. Enter ciphertext. Only ASCII letters A-Z are analyzed; spaces, digits, punctuation, and other characters are removed.
-2. Select “Generate 26 shifts.”
-3. In “Shift list,” compare the text, chi-square rank, and rare-letter state.
-4. In “Analysis,” review the heatmap, top five ranks, per-letter contributions for the top three, threshold, and screen results.
-5. Optionally change the sensitivity-lab settings to compare the effects of sample size and multiple-comparison adjustment.
-6. “Copy result summary” shares conditions and results without including the input text.
-7. Do not decide from a rank alone; inspect readable words, grammar, and context.
+2. Choose general English, a uniform distribution, or a user corpus as the chi-square reference.
+3. Select “Generate 26 shifts.”
+4. In “Shift list,” compare the text, chi-square rank, and rare-letter state.
+5. In “Analysis,” review the heatmap, top five ranks, per-letter contributions for the top three, threshold, and screen results.
+6. Optionally change the sensitivity settings and compare an exact value with a Monte Carlo estimate.
+7. Use “Copy result summary” or “Save JSON” to share conditions and aggregates without plaintext.
+8. Do not decide from a rank alone; inspect readable words, grammar, and context.
 
 Changing the input clears stale results. Generate again for the current input. The limit is 20,000 valid letters.
 
@@ -86,13 +89,21 @@ Changing the input clears stale results. Generate again for the current input. T
 
 ### Chi-square ranking
 
-For each shift, A-Z counts are compared with reference English letter frequencies:
+For each shift, A-Z counts are compared with the selected reference letter frequencies:
 
 ```text
 χ² = Σ (observed count - expected count)² / expected count
 ```
 
 A smaller value is closer to the reference distribution, but the smallest value is not necessarily the correct shift. Short texts and specialized vocabulary can substantially change the ranking. For the top three shifts, the tool sorts the per-letter terms by contribution so that the observations driving the total χ² value can be inspected.
+
+### Reference profiles
+
+- **General English:** the established general-English frequencies used by the tool.
+- **Uniform distribution:** a control with probability `1 / 26` for every letter. Rotating counts across shifts leaves χ² unchanged.
+- **User corpus:** A-Z counts from entered text, normalized after adding one count to every letter. This educational smoothing avoids zero expected frequencies; it does not validate the corpus as a language model.
+
+Changing the reference invalidates the existing ranking and requires regeneration. A user corpus stays in the browser. An exported record contains its smoothed frequency distribution, not the corpus text.
 
 ### Rare-letter screen
 
@@ -113,6 +124,18 @@ For a base sample size `n`, the lab calculates thresholds at half, base, and dou
 
 Lab settings do not change the main rare-letter screen. The lab also does not validate whether a user-selected `p` or `α` is appropriate for the text.
 
+### Monte Carlo comparison
+
+Using `n`, `p`, and `k` from the base sensitivity row, the tool draws seeded pseudorandom samples from `X ~ Bin(n, p)`. It compares the proportion satisfying `X ≥ k` with the exact upper-tail probability. Trial counts are 1,000, 5,000, or 20,000. Rare events can remain noisy even at 20,000 trials.
+
+This comparison covers one binomial upper-tail probability. It does not estimate a family-wide error rate for five letters or all 26 shifts.
+
+### Analysis records
+
+The JSON stores input A-Z counts, reference frequencies, the rare-letter model, sensitivity settings, and aggregate results. On import, the app validates the schema, version, ranges, and count total, then recalculates the ranking rather than trusting stored derived values.
+
+Plaintext, all 26 shifted strings, and user-corpus text are omitted. Letter counts still reveal aggregate characteristics, so users should choose an appropriate sharing scope.
+
 ---
 
 ## ⚠️ Interpretation and limitations
@@ -122,8 +145,12 @@ Lab settings do not change the main rare-letter screen. The lab also does not va
 - The calculation uses a simplified English model with independent letters and a fixed probability.
 - Natural-language letters are dependent, and observed frequencies vary with style, domain, and names.
 - The chi-square ranking does not prove naturalness, meaning, cipher type, or the correct key.
+- A uniform reference makes every shift theoretically tied and carries no ranking information.
+- A small, biased, or mismatched user corpus can bias the resulting rank.
 - A large per-letter contribution shows a large gap from the reference frequency, not that a shift is correct or wrong.
 - User-selected `p` and `α` values in the sensitivity lab are educational trial conditions and may not be suitable for the text.
+- A Monte Carlo estimate has sampling error and cannot prove the correct shift even with more trials.
+- JSON records omit plaintext but do contain aggregate letter frequencies.
 - For a cipher other than a Caesar shift, none of the 26 rows may be the correct plaintext.
 
 This is an educational tool for comparing diagnostic evidence. It cannot prove or automatically determine a decryption.
@@ -138,6 +165,9 @@ This is an educational tool for comparing diagnostic evidence. It cannot prove o
 - **Compare sample size and threshold:** place half, base, and double `n` side by side in the sensitivity lab to see why a fixed count is not appropriate.
 - **Learn about multiple comparisons:** the method panel explains why a five-letter screen divides `α` by five.
 - **Trace why a shift ranks highly:** inspect the top per-letter contributions to see how gaps such as an observed Q or X count increase the total χ² value.
+- **Compare dependence on a reference:** switch among general English, the uniform control, and a same-domain corpus to observe rank changes for the same ciphertext.
+- **Observe error in a rare-probability estimate:** rerun the same seed at 1,000, 5,000, and 20,000 trials and compare each estimate with the exact value.
+- **Transfer results without transferring text:** reload a JSON record in another browser and recalculate ranks from A-Z aggregates and settings.
 - **Watch a frequency distribution rotate:** across all 26 shifts, peaks move between heatmap columns while counts are preserved.
 
 ### General uses
