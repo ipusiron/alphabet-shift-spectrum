@@ -1,647 +1,478 @@
-/* ==========================================================================
-   Alphabet Shift Spectrum - Main Application Logic
-   ========================================================================== */
+(function initAlphabetShiftApp() {
+  'use strict';
 
-// ============================================================
-// Constants & Configuration
-// ============================================================
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const LOW_FREQ_LETTERS = ['J', 'K', 'Q', 'X', 'Z'];
-const P_MAX = 0.00772; // Default max expected frequency for low-freq letters
-
-// ============================================================
-// State Management
-// ============================================================
-let appState = {
-  inputText: '',
-  normalizedText: '',
-  rows: [],
-  mThreshold: 0,
-  activeTab: 'tab1'
-};
-
-// ============================================================
-// Text Processing Functions
-// ============================================================
-
-/**
- * Normalize input text: uppercase, remove non-alphabetic characters
- * @param {string} text - Raw input text
- * @returns {string} - Normalized text (A-Z only)
- */
-function normalizeText(text) {
-  return text.toUpperCase().replace(/[^A-Z]/g, '');
-}
-
-/**
- * Apply Caesar shift to text
- * @param {string} text - Normalized text
- * @param {number} shift - Shift amount (0-25)
- * @returns {string} - Shifted text
- */
-function applyShift(text, shift) {
-  return text.split('').map(char => {
-    const index = ALPHABET.indexOf(char);
-    if (index === -1) return char;
-    const newIndex = (index + shift) % 26;
-    return ALPHABET[newIndex];
-  }).join('');
-}
-
-/**
- * Calculate letter frequency for given text
- * @param {string} text - Text to analyze
- * @returns {Object} - Frequency object { A: count, B: count, ..., Z: count }
- */
-function calculateFrequency(text) {
-  const freq = {};
-  for (const letter of ALPHABET) {
-    freq[letter] = 0;
+  const Core = globalThis.AlphabetShiftCore;
+  const Messages = globalThis.AlphabetShiftMessages;
+  if (!Core || !Messages) {
+    throw new Error('Application dependencies are unavailable.');
   }
-  for (const char of text) {
-    if (freq.hasOwnProperty(char)) {
-      freq[char]++;
+
+  const STORAGE_KEY = 'alphabet-shift-spectrum-language';
+  const appState = {
+    language: 'ja',
+    normalizedText: '',
+    analyzedRows: [],
+    thresholdInfo: null,
+    activeTab: 'tab1',
+    messageKey: '',
+    messageVars: {},
+    messageType: 'info'
+  };
+  let modalReturnFocus = null;
+
+  function interpolate(template, variables = {}) {
+    return template.replace(/\{(\w+)\}/g, (match, key) => (
+      Object.prototype.hasOwnProperty.call(variables, key) ? String(variables[key]) : match
+    ));
+  }
+
+  function t(key, variables = {}) {
+    const dictionary = Messages[appState.language] ?? Messages.ja;
+    return interpolate(dictionary[key] ?? Messages.ja[key] ?? key, variables);
+  }
+
+  function createElement(tagName, className, text) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+    return element;
+  }
+
+  function getStoredLanguage() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored === 'en' ? 'en' : 'ja';
+    } catch {
+      return 'ja';
     }
   }
-  return freq;
-}
 
-/**
- * Generate all 26 shift rows
- * @param {string} normalizedText - Normalized input text
- * @returns {Array} - Array of row objects
- */
-function generateAllShifts(normalizedText) {
-  const rows = [];
-  for (let shift = 0; shift < 26; shift++) {
-    const shiftedText = applyShift(normalizedText, shift);
-    const freq = calculateFrequency(shiftedText);
-    rows.push({
-      shift: shift,
-      text: shiftedText,
-      freq: freq
+  function storeLanguage(language) {
+    try {
+      localStorage.setItem(STORAGE_KEY, language);
+    } catch {
+      // Language switching still works when storage is unavailable.
+    }
+  }
+
+  function applyStaticTranslations() {
+    document.documentElement.lang = appState.language;
+    document.title = t('documentTitle');
+    document.querySelectorAll('[data-i18n]').forEach((element) => {
+      element.textContent = t(element.dataset.i18n);
     });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+      element.placeholder = t(element.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll('[data-i18n-aria-label]').forEach((element) => {
+      element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
+    });
+    document.getElementById('language-toggle').textContent = t('languageButton');
   }
-  return rows;
-}
 
-// ============================================================
-// Analysis Functions
-// ============================================================
+  function updateCharacterCount() {
+    const normalizedLength = Core.normalizeText(document.getElementById('cipher-input').value).length;
+    const count = document.getElementById('char-count');
+    count.textContent = t('charCount', { count: normalizedLength, max: Core.MAX_INPUT_LETTERS });
+    count.classList.toggle('over-limit', normalizedLength > Core.MAX_INPUT_LETTERS);
+    return normalizedLength;
+  }
 
-/**
- * Calculate M threshold based on text length
- * M_threshold = ceil(N * p_max + 3 * sqrt(N * p_max))
- * @param {number} n - Text length
- * @param {number} pMax - Max expected frequency (default 0.00772)
- * @returns {number} - M threshold value
- */
-function calculateMThreshold(n, pMax = P_MAX) {
-  if (n === 0) return 0;
-  const expected = n * pMax;
-  const stdDev = Math.sqrt(expected);
-  return Math.ceil(expected + 3 * stdDev);
-}
+  function showMessage(key, variables = {}, type = 'info') {
+    appState.messageKey = key;
+    appState.messageVars = variables;
+    appState.messageType = type;
+    const message = document.getElementById('input-message');
+    message.textContent = key ? t(key, variables) : '';
+    message.className = `input-message ${type}`;
+  }
 
-/**
- * Get max frequency among low-frequency letters (J,K,Q,X,Z)
- * @param {Object} freq - Frequency object
- * @returns {number} - Maximum count among J,K,Q,X,Z
- */
-function getMaxLowFreqCount(freq) {
-  return Math.max(...LOW_FREQ_LETTERS.map(letter => freq[letter]));
-}
+  function createFrequencyTable(row) {
+    const wrapper = createElement('div', 'freq-table-wrapper');
+    wrapper.tabIndex = 0;
 
-/**
- * Get sum of frequencies for low-frequency letters (J,K,Q,X,Z)
- * @param {Object} freq - Frequency object
- * @returns {number} - Sum of counts for J,K,Q,X,Z
- */
-function getSumLowFreqCount(freq) {
-  return LOW_FREQ_LETTERS.reduce((sum, letter) => sum + freq[letter], 0);
-}
+    const table = createElement('table', 'freq-table');
+    const caption = createElement('caption', 'visually-hidden', t('shiftApplied', { shift: row.shift }));
+    table.appendChild(caption);
 
-/**
- * Check if a shift is a candidate (not rejected by M threshold)
- * @param {Object} row - Row object with freq
- * @param {number} mThreshold - M threshold value
- * @returns {boolean} - True if candidate, false if rejected
- */
-function isCandidate(row, mThreshold) {
-  const maxLowFreq = getMaxLowFreqCount(row.freq);
-  return maxLowFreq < mThreshold;
-}
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    for (const letter of Core.ALPHABET) {
+      const header = createElement('th', Core.LOW_FREQ_LETTERS.includes(letter) ? 'low-freq-letter' : '', letter);
+      header.scope = 'col';
+      headerRow.appendChild(header);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
 
-/**
- * Filter rows by M threshold
- * @param {Array} rows - All shift rows
- * @param {number} mThreshold - M threshold value
- * @returns {Object} - { candidates: Array, rejected: Array }
- */
-function filterByMThreshold(rows, mThreshold) {
-  const candidates = [];
-  const rejected = [];
+    const tbody = document.createElement('tbody');
+    const dataRow = document.createElement('tr');
+    for (const letter of Core.ALPHABET) {
+      dataRow.appendChild(createElement(
+        'td',
+        Core.LOW_FREQ_LETTERS.includes(letter) ? 'low-freq-letter' : '',
+        row.freq[letter]
+      ));
+    }
+    tbody.appendChild(dataRow);
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    return wrapper;
+  }
 
-  for (const row of rows) {
-    const maxLowFreq = getMaxLowFreqCount(row.freq);
-    const sumLowFreq = getSumLowFreqCount(row.freq);
-    const rowWithStats = { ...row, maxLowFreq, sumLowFreq };
+  function renderShiftResults() {
+    const container = document.getElementById('shift-results');
+    container.replaceChildren();
+    if (appState.analyzedRows.length === 0) {
+      container.appendChild(createElement('p', 'placeholder-message', t('shiftsPlaceholder')));
+      return;
+    }
 
-    if (maxLowFreq < mThreshold) {
-      candidates.push(rowWithStats);
-    } else {
-      rejected.push(rowWithStats);
+    for (const row of appState.analyzedRows) {
+      const statusClass = row.passesRareLetterScreen ? 'within' : 'flagged';
+      const card = createElement('article', `shift-card ${statusClass}`);
+      card.id = `shift-${row.shift}`;
+
+      const header = createElement('div', 'shift-header');
+      const heading = createElement('h2', 'shift-number', `Shift ${row.shift}`);
+      const badges = createElement('div', 'shift-badges');
+      badges.appendChild(createElement('span', 'rank-badge', t('chiRankShort', { rank: row.chiSquareRank })));
+      badges.appendChild(createElement(
+        'span',
+        `shift-status ${statusClass}`,
+        t(row.passesRareLetterScreen ? 'within' : 'flagged')
+      ));
+      header.append(heading, badges);
+      card.appendChild(header);
+      card.appendChild(createElement('p', 'shift-text', row.text));
+      card.appendChild(createFrequencyTable(row));
+      container.appendChild(card);
     }
   }
 
-  return { candidates, rejected };
-}
-
-// ============================================================
-// UI Rendering Functions
-// ============================================================
-
-/**
- * Create frequency table element for a single shift
- * @param {Object} freq - Frequency object
- * @returns {HTMLElement} - Table wrapper element
- */
-function createFrequencyTable(freq) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'freq-table-wrapper';
-
-  const table = document.createElement('table');
-  table.className = 'freq-table';
-
-  // Header row
-  const thead = document.createElement('thead');
-  const headerRow = document.createElement('tr');
-  for (const letter of ALPHABET) {
-    const th = document.createElement('th');
-    th.textContent = letter;
-    if (LOW_FREQ_LETTERS.includes(letter)) {
-      th.className = 'low-freq-letter';
-    }
-    headerRow.appendChild(th);
-  }
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-
-  // Data row
-  const tbody = document.createElement('tbody');
-  const dataRow = document.createElement('tr');
-  for (const letter of ALPHABET) {
-    const td = document.createElement('td');
-    td.textContent = freq[letter];
-    if (LOW_FREQ_LETTERS.includes(letter)) {
-      td.className = 'low-freq-letter';
-    }
-    dataRow.appendChild(td);
-  }
-  tbody.appendChild(dataRow);
-  table.appendChild(tbody);
-
-  wrapper.appendChild(table);
-  return wrapper;
-}
-
-/**
- * Render shift results table in Tab1
- * @param {Array} rows - Shift row data
- */
-function renderShiftResults(rows) {
-  const container = document.getElementById('shift-results');
-  container.innerHTML = '';
-
-  if (rows.length === 0) {
-    container.innerHTML = '<p class="placeholder-message">シフト結果がありません</p>';
-    return;
+  function getHeatmapClass(count, maxCount) {
+    if (maxCount === 0 || count === 0) return 'heat-zero';
+    const ratio = count / maxCount;
+    if (ratio < 0.25) return 'heat-low';
+    if (ratio < 0.5) return 'heat-mid';
+    if (ratio < 0.75) return 'heat-high';
+    return 'heat-max';
   }
 
-  const mThreshold = appState.mThreshold;
-
-  for (const row of rows) {
-    const card = document.createElement('div');
-    card.className = 'shift-card';
-
-    const candidateStatus = isCandidate(row, mThreshold);
-    if (candidateStatus) {
-      card.classList.add('candidate');
-    } else {
-      card.classList.add('rejected');
+  function renderHeatmap() {
+    const container = document.getElementById('heatmap-container');
+    container.replaceChildren();
+    if (appState.analyzedRows.length === 0) {
+      container.appendChild(createElement('p', 'placeholder-message', t('heatmapPlaceholder')));
+      return;
     }
 
-    // Header
-    const header = document.createElement('div');
-    header.className = 'shift-header';
-
-    const shiftNum = document.createElement('span');
-    shiftNum.className = 'shift-number';
-    shiftNum.textContent = `Shift ${row.shift}`;
-    header.appendChild(shiftNum);
-
-    const status = document.createElement('span');
-    status.className = `shift-status ${candidateStatus ? 'candidate' : 'rejected'}`;
-    status.textContent = candidateStatus ? '候補' : '除外';
-    header.appendChild(status);
-
-    card.appendChild(header);
-
-    // Shifted text
-    const textDiv = document.createElement('div');
-    textDiv.className = 'shift-text';
-    textDiv.textContent = row.text;
-    card.appendChild(textDiv);
-
-    // Frequency table
-    const freqTable = createFrequencyTable(row.freq);
-    card.appendChild(freqTable);
-
-    container.appendChild(card);
-  }
-}
-
-/**
- * Get heatmap cell color based on frequency
- * @param {number} count - Letter count
- * @param {number} maxCount - Maximum count in dataset
- * @returns {string} - CSS color value
- */
-function getHeatmapColor(count, maxCount) {
-  if (maxCount === 0 || count === 0) return 'var(--heatmap-zero)';
-
-  const ratio = count / maxCount;
-
-  if (ratio < 0.25) return 'var(--heatmap-low)';
-  if (ratio < 0.50) return 'var(--heatmap-mid)';
-  if (ratio < 0.75) return 'var(--heatmap-high)';
-  return 'var(--heatmap-max)';
-}
-
-/**
- * Render heatmap in Tab2
- * @param {Array} rows - Shift row data
- */
-function renderHeatmap(rows) {
-  const container = document.getElementById('heatmap-container');
-  container.innerHTML = '';
-
-  if (rows.length === 0) {
-    container.innerHTML = '<p class="placeholder-message">シフト生成後にヒートマップが表示されます</p>';
-    return;
-  }
-
-  // Find max count for color scaling
-  let maxCount = 0;
-  for (const row of rows) {
-    for (const letter of ALPHABET) {
-      maxCount = Math.max(maxCount, row.freq[letter]);
-    }
-  }
-
-  const grid = document.createElement('div');
-  grid.className = 'heatmap-grid';
-
-  const numCols = 27; // 1 label + 26 letters
-
-  // Header row (empty corner + A-Z)
-  const cornerCell = document.createElement('div');
-  cornerCell.className = 'heatmap-header';
-  cornerCell.dataset.col = '0';
-  cornerCell.textContent = '';
-  grid.appendChild(cornerCell);
-
-  for (let colIdx = 0; colIdx < ALPHABET.length; colIdx++) {
-    const letter = ALPHABET[colIdx];
-    const headerCell = document.createElement('div');
-    headerCell.className = 'heatmap-header';
-    headerCell.dataset.col = String(colIdx + 1);
-    if (LOW_FREQ_LETTERS.includes(letter)) {
-      headerCell.classList.add('low-freq');
-    }
-    headerCell.textContent = letter;
-    grid.appendChild(headerCell);
-  }
-
-  // Data rows
-  for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-    const row = rows[rowIdx];
-
-    // Row label
-    const rowLabel = document.createElement('div');
-    rowLabel.className = 'heatmap-row-label';
-    rowLabel.dataset.row = String(rowIdx + 1);
-    rowLabel.dataset.col = '0';
-    rowLabel.textContent = `S${row.shift}`;
-    grid.appendChild(rowLabel);
-
-    // Cells
-    for (let colIdx = 0; colIdx < ALPHABET.length; colIdx++) {
-      const letter = ALPHABET[colIdx];
-      const cell = document.createElement('div');
-      cell.className = 'heatmap-cell';
-      cell.dataset.row = String(rowIdx + 1);
-      cell.dataset.col = String(colIdx + 1);
-      if (LOW_FREQ_LETTERS.includes(letter)) {
-        cell.classList.add('low-freq-col');
+    let maxCount = 0;
+    for (const row of appState.analyzedRows) {
+      for (const letter of Core.ALPHABET) {
+        maxCount = Math.max(maxCount, row.freq[letter]);
       }
-      cell.textContent = row.freq[letter];
-      cell.style.backgroundColor = getHeatmapColor(row.freq[letter], maxCount);
-      cell.title = `Shift: ${row.shift}, ${letter}: ${row.freq[letter]}回`;
-      grid.appendChild(cell);
+    }
+
+    const grid = createElement('div', 'heatmap-grid');
+    grid.setAttribute('role', 'table');
+    grid.setAttribute('aria-label', t('heatmapHeading'));
+
+    const corner = createElement('div', 'heatmap-header', '');
+    corner.dataset.col = '0';
+    corner.setAttribute('role', 'columnheader');
+    grid.appendChild(corner);
+    [...Core.ALPHABET].forEach((letter, columnIndex) => {
+      const header = createElement(
+        'div',
+        `heatmap-header${Core.LOW_FREQ_LETTERS.includes(letter) ? ' low-freq' : ''}`,
+        letter
+      );
+      header.dataset.col = String(columnIndex + 1);
+      header.setAttribute('role', 'columnheader');
+      grid.appendChild(header);
+    });
+
+    appState.analyzedRows.forEach((row, rowIndex) => {
+      const label = createElement('div', 'heatmap-row-label', `S${row.shift}`);
+      label.dataset.row = String(rowIndex + 1);
+      label.dataset.col = '0';
+      label.setAttribute('role', 'rowheader');
+      grid.appendChild(label);
+
+      [...Core.ALPHABET].forEach((letter, columnIndex) => {
+        const count = row.freq[letter];
+        const cell = createElement(
+          'div',
+          `heatmap-cell ${getHeatmapClass(count, maxCount)}${Core.LOW_FREQ_LETTERS.includes(letter) ? ' low-freq-col' : ''}`,
+          count
+        );
+        const accessibleText = t('heatmapCell', { shift: row.shift, letter, count });
+        cell.dataset.row = String(rowIndex + 1);
+        cell.dataset.col = String(columnIndex + 1);
+        cell.title = accessibleText;
+        cell.setAttribute('role', 'cell');
+        cell.setAttribute('aria-label', accessibleText);
+        grid.appendChild(cell);
+      });
+    });
+
+    container.appendChild(grid);
+    initHeatmapHighlight(grid);
+  }
+
+  function initHeatmapHighlight(grid) {
+    function clearHighlight() {
+      grid.querySelectorAll('.heatmap-highlight-cell, .heatmap-highlight-row, .heatmap-highlight-col')
+        .forEach((element) => element.classList.remove(
+          'heatmap-highlight-cell',
+          'heatmap-highlight-row',
+          'heatmap-highlight-col'
+        ));
+    }
+
+    grid.querySelectorAll('.heatmap-cell').forEach((cell) => {
+      cell.addEventListener('pointerenter', () => {
+        clearHighlight();
+        const { row, col } = cell.dataset;
+        cell.classList.add('heatmap-highlight-cell');
+        grid.querySelectorAll(`[data-row="${row}"]`).forEach((element) => element.classList.add('heatmap-highlight-row'));
+        grid.querySelectorAll(`[data-col="${col}"]`).forEach((element) => element.classList.add('heatmap-highlight-col'));
+      });
+    });
+    grid.addEventListener('pointerleave', clearHighlight);
+  }
+
+  function renderRankResults() {
+    const container = document.getElementById('rank-results');
+    container.replaceChildren();
+    if (appState.analyzedRows.length === 0) {
+      container.appendChild(createElement('p', 'placeholder-message', t('chiPlaceholder')));
+      return;
+    }
+
+    const rankedRows = [...appState.analyzedRows]
+      .sort((a, b) => a.chiSquareRank - b.chiSquareRank)
+      .slice(0, 5);
+    const list = createElement('ol', 'rank-list');
+    for (const row of rankedRows) {
+      const item = document.createElement('li');
+      const rank = createElement('span', 'rank-position', t('chiRank', { rank: row.chiSquareRank }));
+      const shift = createElement('strong', 'rank-shift', `Shift ${row.shift}`);
+      const score = createElement('span', 'rank-score', t('chiScore', { score: row.chiSquare.toFixed(2) }));
+      item.append(rank, shift, score);
+      list.appendChild(item);
+    }
+    container.appendChild(list);
+  }
+
+  function createFilterGroup(rows, isWithin) {
+    const group = createElement('section', `filter-group ${isWithin ? 'within' : 'flagged'}`);
+    group.appendChild(createElement(
+      'h4',
+      '',
+      t(isWithin ? 'withinGroup' : 'flaggedGroup', { count: rows.length })
+    ));
+    const list = createElement('div', 'filter-list');
+    if (rows.length === 0) {
+      list.appendChild(createElement('span', 'placeholder-message compact', t('none')));
+    }
+    for (const row of rows) {
+      const item = createElement('span', `filter-item ${isWithin ? 'within' : 'flagged'}`);
+      item.appendChild(createElement('strong', '', `Shift ${row.shift}`));
+      item.appendChild(createElement('span', 'metric-value', t('resultStats', {
+        max: row.maxLowFreq,
+        sum: row.sumLowFreq
+      })));
+      if (!isWithin) {
+        item.appendChild(createElement('span', 'flagged-letters', t('flaggedLetters', {
+          letters: row.flaggedLetters.join(', ')
+        })));
+      }
+      list.appendChild(item);
+    }
+    group.appendChild(list);
+    return group;
+  }
+
+  function renderFilterResults() {
+    const container = document.getElementById('filter-results');
+    container.replaceChildren();
+    if (appState.analyzedRows.length === 0) {
+      container.appendChild(createElement('p', 'placeholder-message', t('filterPlaceholder')));
+      return;
+    }
+    const groups = Core.partitionAnalyzedRows(appState.analyzedRows);
+    container.append(createFilterGroup(groups.within, true), createFilterGroup(groups.flagged, false));
+  }
+
+  function updateThresholdDisplay() {
+    document.getElementById('text-length').textContent = appState.thresholdInfo?.n ?? 0;
+    document.getElementById('rare-threshold').textContent = appState.thresholdInfo?.threshold ?? '-';
+  }
+
+  function renderDynamicResults() {
+    renderShiftResults();
+    renderHeatmap();
+    renderRankResults();
+    renderFilterResults();
+    updateThresholdDisplay();
+  }
+
+  function clearAnalysis() {
+    appState.normalizedText = '';
+    appState.analyzedRows = [];
+    appState.thresholdInfo = null;
+    renderDynamicResults();
+  }
+
+  function handleGenerate() {
+    const normalizedText = Core.normalizeText(document.getElementById('cipher-input').value);
+    if (normalizedText.length === 0) {
+      clearAnalysis();
+      showMessage('enterLetters', {}, 'error');
+      return;
+    }
+    if (normalizedText.length > Core.MAX_INPUT_LETTERS) {
+      clearAnalysis();
+      showMessage('tooLong', { max: Core.MAX_INPUT_LETTERS }, 'error');
+      return;
+    }
+
+    const thresholdInfo = Core.calculateRareLetterThreshold(normalizedText.length);
+    appState.normalizedText = normalizedText;
+    appState.thresholdInfo = { ...thresholdInfo, n: normalizedText.length };
+    appState.analyzedRows = Core.analyzeRows(
+      Core.generateAllShifts(normalizedText),
+      thresholdInfo.threshold
+    );
+    renderDynamicResults();
+    showMessage('ready', { count: normalizedText.length }, 'success');
+  }
+
+  function handleInputChange() {
+    const normalizedLength = updateCharacterCount();
+    const currentText = Core.normalizeText(document.getElementById('cipher-input').value);
+    if (appState.analyzedRows.length > 0 && currentText !== appState.normalizedText) {
+      clearAnalysis();
+      showMessage('inputChanged', {}, 'info');
+    }
+    if (normalizedLength > Core.MAX_INPUT_LETTERS) {
+      showMessage('tooLong', { max: Core.MAX_INPUT_LETTERS }, 'error');
     }
   }
 
-  container.appendChild(grid);
+  function switchTab(tabId, moveFocus = false) {
+    const targetButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+    if (!targetButton) return;
 
-  // Add hover highlighting
-  initHeatmapHover(grid);
-}
+    document.querySelectorAll('.tab-button').forEach((button) => {
+      const active = button === targetButton;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    document.querySelectorAll('.tab-panel').forEach((panel) => {
+      const active = panel.id === `${tabId}-panel`;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
+    });
+    appState.activeTab = tabId;
+    if (moveFocus) targetButton.focus();
+  }
 
-/**
- * Initialize heatmap hover highlighting
- * @param {HTMLElement} grid - The heatmap grid element
- */
-function initHeatmapHover(grid) {
-  const cells = grid.querySelectorAll('.heatmap-cell');
-
-  cells.forEach(cell => {
-    cell.addEventListener('mouseenter', () => {
-      const row = cell.dataset.row;
-      const col = cell.dataset.col;
-
-      // Highlight current cell
-      cell.classList.add('heatmap-highlight-cell');
-
-      // Highlight row
-      grid.querySelectorAll(`[data-row="${row}"]`).forEach(el => {
-        el.classList.add('heatmap-highlight-row');
-      });
-
-      // Highlight column (including header)
-      grid.querySelectorAll(`[data-col="${col}"]`).forEach(el => {
-        el.classList.add('heatmap-highlight-col');
+  function initTabs() {
+    const tabs = [...document.querySelectorAll('.tab-button')];
+    tabs.forEach((button, index) => {
+      button.addEventListener('click', () => switchTab(button.dataset.tab));
+      button.addEventListener('keydown', (event) => {
+        let targetIndex = null;
+        if (event.key === 'ArrowRight') targetIndex = (index + 1) % tabs.length;
+        if (event.key === 'ArrowLeft') targetIndex = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === 'Home') targetIndex = 0;
+        if (event.key === 'End') targetIndex = tabs.length - 1;
+        if (targetIndex !== null) {
+          event.preventDefault();
+          switchTab(tabs[targetIndex].dataset.tab, true);
+        }
       });
     });
-
-    cell.addEventListener('mouseleave', () => {
-      // Remove all highlights
-      grid.querySelectorAll('.heatmap-highlight-cell').forEach(el => {
-        el.classList.remove('heatmap-highlight-cell');
-      });
-      grid.querySelectorAll('.heatmap-highlight-row').forEach(el => {
-        el.classList.remove('heatmap-highlight-row');
-      });
-      grid.querySelectorAll('.heatmap-highlight-col').forEach(el => {
-        el.classList.remove('heatmap-highlight-col');
-      });
-    });
-  });
-}
-
-/**
- * Render filter results in Tab2
- * @param {Object} filterResult - { candidates, rejected }
- */
-function renderFilterResults(filterResult) {
-  const container = document.getElementById('filter-results');
-  container.innerHTML = '';
-
-  if (filterResult.candidates.length === 0 && filterResult.rejected.length === 0) {
-    container.innerHTML = '<p class="placeholder-message">シフト生成後にフィルター結果が表示されます</p>';
-    return;
   }
 
-  // Candidates group
-  const candidatesGroup = document.createElement('div');
-  candidatesGroup.className = 'filter-group candidates';
-
-  const candidatesTitle = document.createElement('h3');
-  candidatesTitle.textContent = `候補シフト (${filterResult.candidates.length}件)`;
-  candidatesGroup.appendChild(candidatesTitle);
-
-  const candidatesList = document.createElement('div');
-  candidatesList.className = 'filter-list';
-
-  for (const row of filterResult.candidates) {
-    const item = document.createElement('span');
-    item.className = 'filter-item candidate';
-    item.textContent = `Shift ${row.shift} `;
-    const mValue = document.createElement('span');
-    mValue.className = 'm-value';
-    mValue.textContent = `(最大${row.maxLowFreq}, 合計${row.sumLowFreq})`;
-    item.appendChild(mValue);
-    candidatesList.appendChild(item);
+  function getFocusableElements(container) {
+    return [...container.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')];
   }
 
-  if (filterResult.candidates.length === 0) {
-    candidatesList.innerHTML = '<span class="placeholder-message">該当なし</span>';
-  }
-
-  candidatesGroup.appendChild(candidatesList);
-  container.appendChild(candidatesGroup);
-
-  // Rejected group
-  const rejectedGroup = document.createElement('div');
-  rejectedGroup.className = 'filter-group rejected';
-
-  const rejectedTitle = document.createElement('h3');
-  rejectedTitle.textContent = `除外シフト (${filterResult.rejected.length}件)`;
-  rejectedGroup.appendChild(rejectedTitle);
-
-  const rejectedList = document.createElement('div');
-  rejectedList.className = 'filter-list';
-
-  for (const row of filterResult.rejected) {
-    const item = document.createElement('span');
-    item.className = 'filter-item rejected';
-    item.textContent = `Shift ${row.shift} `;
-    const mValue = document.createElement('span');
-    mValue.className = 'm-value';
-    mValue.textContent = `(最大${row.maxLowFreq}, 合計${row.sumLowFreq})`;
-    item.appendChild(mValue);
-    rejectedList.appendChild(item);
-  }
-
-  if (filterResult.rejected.length === 0) {
-    rejectedList.innerHTML = '<span class="placeholder-message">該当なし</span>';
-  }
-
-  rejectedGroup.appendChild(rejectedList);
-  container.appendChild(rejectedGroup);
-}
-
-/**
- * Update threshold display in Tab2
- * @param {number} n - Text length
- * @param {number} mThreshold - Calculated threshold
- */
-function updateThresholdDisplay(n, mThreshold) {
-  document.getElementById('text-length').textContent = n;
-  document.getElementById('m-threshold').textContent = mThreshold > 0 ? mThreshold : '-';
-}
-
-// ============================================================
-// Tab Navigation
-// ============================================================
-
-/**
- * Switch to specified tab
- * @param {string} tabId - Target tab ID (tab1, tab2, etc.)
- */
-function switchTab(tabId) {
-  // Update buttons
-  const buttons = document.querySelectorAll('.tab-button');
-  buttons.forEach(btn => {
-    const isActive = btn.dataset.tab === tabId;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-selected', isActive);
-  });
-
-  // Update panels
-  const panels = document.querySelectorAll('.tab-panel');
-  panels.forEach(panel => {
-    const isActive = panel.id === `${tabId}-panel`;
-    panel.classList.toggle('active', isActive);
-    panel.hidden = !isActive;
-  });
-
-  appState.activeTab = tabId;
-}
-
-/**
- * Initialize tab navigation event listeners
- */
-function initTabNavigation() {
-  const buttons = document.querySelectorAll('.tab-button');
-  buttons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!btn.disabled) {
-        switchTab(btn.dataset.tab);
-      }
-    });
-  });
-}
-
-// ============================================================
-// Event Handlers
-// ============================================================
-
-/**
- * Handle generate button click
- */
-function handleGenerate() {
-  const input = document.getElementById('cipher-input').value;
-  const normalizedText = normalizeText(input);
-
-  if (normalizedText.length === 0) {
-    alert('有効な英字を入力してください');
-    return;
-  }
-
-  // Update state
-  appState.inputText = input;
-  appState.normalizedText = normalizedText;
-  appState.rows = generateAllShifts(normalizedText);
-  appState.mThreshold = calculateMThreshold(normalizedText.length);
-
-  // Render Tab1
-  renderShiftResults(appState.rows);
-
-  // Update Tab2
-  updateThresholdDisplay(normalizedText.length, appState.mThreshold);
-  renderHeatmap(appState.rows);
-
-  const filterResult = filterByMThreshold(appState.rows, appState.mThreshold);
-  renderFilterResults(filterResult);
-}
-
-/**
- * Handle textarea input (update character count)
- * @param {Event} event - Input event
- */
-function handleInputChange(event) {
-  const text = event.target.value;
-  const normalizedLength = normalizeText(text).length;
-  document.getElementById('char-count').textContent = `有効文字数: ${normalizedLength}`;
-}
-
-// ============================================================
-// Modal
-// ============================================================
-
-/**
- * Open modal
- * @param {string} modalId - Modal element ID
- */
-function openModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
+  function openModal() {
+    const modal = document.getElementById('formula-modal');
+    modalReturnFocus = document.activeElement;
     modal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
+    modal.querySelector('.modal-close').focus();
   }
-}
 
-/**
- * Close modal
- * @param {string} modalId - Modal element ID
- */
-function closeModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
+  function closeModal() {
+    const modal = document.getElementById('formula-modal');
+    if (modal.hidden) return;
     modal.hidden = true;
-    document.body.style.overflow = '';
-  }
-}
-
-/**
- * Initialize modal event listeners
- */
-function initModal() {
-  // Formula help button
-  const helpBtn = document.getElementById('formula-help-btn');
-  if (helpBtn) {
-    helpBtn.addEventListener('click', () => openModal('formula-modal'));
+    document.body.classList.remove('modal-open');
+    if (
+      modalReturnFocus
+      && typeof modalReturnFocus.focus === 'function'
+      && document.contains(modalReturnFocus)
+    ) {
+      modalReturnFocus.focus();
+    }
   }
 
-  // Modal close buttons and backdrop
-  document.querySelectorAll('.modal').forEach(modal => {
-    const closeBtn = modal.querySelector('.modal-close');
-    const backdrop = modal.querySelector('.modal-backdrop');
+  function initModal() {
+    const modal = document.getElementById('formula-modal');
+    document.getElementById('formula-help-btn').addEventListener('click', openModal);
+    modal.querySelectorAll('[data-modal-close]').forEach((element) => element.addEventListener('click', closeModal));
+    modal.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModal();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = getFocusableElements(modal);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
 
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => closeModal(modal.id));
+  function switchLanguage() {
+    appState.language = appState.language === 'ja' ? 'en' : 'ja';
+    storeLanguage(appState.language);
+    applyStaticTranslations();
+    updateCharacterCount();
+    renderDynamicResults();
+    if (appState.messageKey) {
+      showMessage(appState.messageKey, appState.messageVars, appState.messageType);
     }
-    if (backdrop) {
-      backdrop.addEventListener('click', () => closeModal(modal.id));
-    }
-  });
+  }
 
-  // ESC key to close modals
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.modal:not([hidden])').forEach(modal => {
-        closeModal(modal.id);
-      });
-    }
-  });
-}
+  function init() {
+    appState.language = getStoredLanguage();
+    applyStaticTranslations();
+    updateCharacterCount();
+    initTabs();
+    initModal();
+    renderDynamicResults();
 
-// ============================================================
-// Initialization
-// ============================================================
+    document.getElementById('language-toggle').addEventListener('click', switchLanguage);
+    document.getElementById('generate-btn').addEventListener('click', handleGenerate);
+    document.getElementById('cipher-input').addEventListener('input', handleInputChange);
+  }
 
-/**
- * Initialize the application
- */
-function init() {
-  initTabNavigation();
-  initModal();
-
-  // Event listeners
-  document.getElementById('generate-btn').addEventListener('click', handleGenerate);
-  document.getElementById('cipher-input').addEventListener('input', handleInputChange);
-}
-
-// Start application when DOM is ready
-document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', init);
+}());
