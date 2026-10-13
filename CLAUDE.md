@@ -1,56 +1,62 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides development guidance for Alphabet Shift Spectrum.
 
-## Project Overview
+## Project overview
 
-Alphabet Shift Spectrum is a web-based cryptanalysis support tool that visualizes letter frequency distributions across all 26 alphabet shifts. It's designed for Caesar cipher and monoalphabetic shift cipher analysis.
+Alphabet Shift Spectrum is a dependency-free browser tool for comparing all 26 Caesar shifts. It presents shifted text, A-Z counts, a heatmap, chi-square rankings against reference English frequencies, and an exact-binomial rare-letter screen.
+
+The tool presents evidence for manual inspection. It does not prove the correct plaintext, key, language, or cipher type.
 
 ## Architecture
 
-- **Single Page Application (SPA)** with tab-based navigation
-- **Tech stack**: Vanilla HTML/CSS/JavaScript (no frameworks)
-- **UI language**: Japanese
+- `index.html`: semantic page structure and strict CSP
+- `logic.js`: DOM-independent shift, frequency, exact-binomial, and chi-square logic
+- `messages.js`: complete Japanese and English UI dictionaries
+- `script.js`: rendering, language switching, tabs, and modal behavior
+- `style.css`: shared tokens and components
+- `style-mobile.css`: mobile-first layout
+- `style-tablet.css`: enhancements from 600px
+- `style-laptop.css`: enhancements from 900px
+- `test/`: Node.js built-in tests
 
-### Tab Structure
-- Tab1: Shift & Frequency Table - Input text and generate 26 shifts with A-Z frequency counts
-- Tab2: Frequency Analysis & Filtering - Heatmap display and low-frequency letter (J,K,Q,X,Z) analysis with M-threshold filtering
-- Tab3/Tab4: Reserved for future features
+The static app must work over HTTP(S) and by opening `index.html` through `file://`. Do not add external runtime dependencies.
 
-### Core Data Structure
-```js
-rows = [
-  {
-    shift: 0,
-    text: "...",
-    freq: { A:0, B:1, ... Z:0 }
-  }
-]
+## Statistical model
+
+### Rare-letter screen
+
+The screen checks J, K, Q, X, and Z for each shift. It uses the largest reference frequency among the five, `p = 0.00772`, as a shared upper bound.
+
+```text
+k = min { k : P(X >= k) <= alpha / 5 }
+X ~ Bin(n, p), p = 0.00772, alpha = 0.003
 ```
 
-### Processing Flow
-1. Normalize input text (uppercase, remove non-alpha)
-2. Generate 0-25 shifts
-3. Calculate A-Z frequency for each shift
-4. Compute analysis metrics (S, M)
+`logic.js` computes the exact discrete binomial distribution with relative weights around its mode. Do not replace this with a normal approximation. The binomial standard deviation is `sqrt(np(1-p))`, but it is explanatory only.
 
-## Threshold Formula
+The Bonferroni adjustment applies to five letters within one shift. Do not describe it as a 99.7% confidence interval across all 26 shifts.
 
-For filtering candidate shifts:
-- N = total text length
-- p_max = max expected frequency among {J,K,Q,X,Z} (default: 0.00772)
-- M_threshold = ceil(N * p_max + 3 * sqrt(N * p_max))
-- Shifts where max(J,K,Q,X,Z) >= M_threshold are rejected
+### Chi-square ranking
+
+Each shift is ranked by Pearson's chi-square statistic against the reference A-Z distribution. A smaller score is only a relative clue. Do not label the first-ranked shift as correct or attach a confidence percentage.
 
 ## Development
 
-Static HTML/CSS/JS project - open `index.html` directly in browser. No build step required.
+No build or dependency installation is required.
 
-## Mobile-First CSS Guidelines
+```text
+npm test
+node --check logic.js
+node --check messages.js
+node --check script.js
+```
 
-This project follows mobile-first design principles (see `.claude/skills/mobile-first-web-ui/SKILL.md`):
-- Base CSS targets mobile (360-414px)
-- Breakpoints: 600px (tablet), 900px (laptop/PC)
-- Use CSS Grid/Flexbox for layouts
-- Prefer `rem`/`em` units over `px`
-- CSS files may be split: style.css (base), style-mobile.css, style-tablet.css, style-laptop.css
+## UI requirements
+
+- Keep Japanese and English dictionaries key-for-key identical.
+- Re-render all derived results after a language change.
+- Clear generated results when the input changes so stale analysis is never shown as current.
+- Keep page-level width within 320px and 390px viewports; wide data tables and the heatmap may scroll inside their own containers.
+- Preserve visible focus, keyboard tab navigation, modal focus containment, and 44px touch targets.
+- Keep unimplemented tabs hidden.

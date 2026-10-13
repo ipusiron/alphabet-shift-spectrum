@@ -6,10 +6,10 @@ slug: alphabet-shift-spectrum
 title: "Alphabet Shift Spectrum"
 
 subtitle_ja: "26シフト頻度可視化ツール"
-subtitle_en: "26-Shift Frequency Visualization Tool"
+subtitle_en: "26-Shift Frequency Visualizer"
 
-description_ja: "Caesar暗号・単一換字暗号の解析を支援するツール。26シフトすべての文字頻度を可視化し、低頻度文字（J,K,Q,X,Z）の統計的フィルタリングで候補を絞り込む。"
-description_en: "A tool to assist in analyzing Caesar cipher and monoalphabetic shift ciphers. Visualizes letter frequency for all 26 shifts and narrows candidates through statistical filtering of low-frequency letters (J, K, Q, X, Z)."
+description_ja: "Caesar暗号の26通りのシフトを一覧化し、文字頻度ヒートマップ、カイ二乗順位、厳密二項分布による希少文字チェックを比較できる学習ツール。"
+description_en: "An educational tool for comparing all 26 Caesar shifts with a frequency heatmap, chi-square ranking, and an exact-binomial rare-letter screen."
 
 category_ja:
   - 暗号解析
@@ -23,9 +23,9 @@ difficulty: 3
 tags:
   - Caesar cipher
   - frequency analysis
-  - cryptanalysis
+  - binomial distribution
+  - chi-square
   - vanilla JavaScript
-  - responsive design
 
 repo_url: "https://github.com/ipusiron/alphabet-shift-spectrum"
 demo_url: "https://ipusiron.github.io/alphabet-shift-spectrum/"
@@ -34,7 +34,7 @@ hub: true
 ---
 -->
 
-# Alphabet Shift Spectrum – 26シフト頻度可視化ツール
+# Alphabet Shift Spectrum - 26シフト頻度可視化ツール
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/ipusiron/alphabet-shift-spectrum?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/ipusiron/alphabet-shift-spectrum?style=social)
@@ -44,10 +44,11 @@ hub: true
 
 **Day107 - 生成AIで作るセキュリティツール200**
 
-**Alphabet Shift Spectrum** は、Caesar暗号や単一換字暗号の解析を支援するWebツールです。
+[English](README.en.md)
 
-入力されたテキストに対して0〜25の全シフトを適用し、各シフトごとの文字頻度を可視化します。
-さらに、低頻度文字（J, K, Q, X, Z）の統計的分析により、候補となるシフト量を絞り込みます。
+**Alphabet Shift Spectrum**は、Caesar暗号などの26通りのアルファベットシフトを比較する学習用Webツールです。シフト結果、A～Zの出現回数、ヒートマップ、英語文字頻度へのカイ二乗順位、希少文字のチェック結果を同じ入力から確認できます。
+
+順位やチェック結果は、正しい平文や鍵を自動判定するものではありません。短文、固有名詞、英語以外の文章では特に不安定になるため、実際の語や文脈と併せて利用してください。
 
 ---
 
@@ -55,129 +56,175 @@ hub: true
 
 👉 **[https://ipusiron.github.io/alphabet-shift-spectrum/](https://ipusiron.github.io/alphabet-shift-spectrum/)**
 
-ブラウザーで直接お試しいただけます。
+ブラウザーで直接お試しいただけます。入力内容は外部へ送信されず、ブラウザー内だけで処理されます。
 
 ---
 
 ## 📸 スクリーンショット
 
-以下は実際の画面例です。
-
->![シフト一覧を生成](assets/screenshot.png)
+>![26通りのシフト一覧](assets/screenshot.png)
 >
-> *シフト一覧を生成*
+>*26通りのシフトとA～Zの出現回数*
 
->![頻度ヒートマップ](assets/screenshot1.png)
+>![頻度ヒートマップとカイ二乗順位](assets/screenshot1.png)
 >
-> *頻度ヒートマップ*
+>*頻度ヒートマップと英語文字頻度への適合順位*
 
->![低頻度文字分析 (J, K, Q, X, Z)](assets/screenshot2.png)
+>![希少文字チェック](assets/screenshot2.png)
 >
-> *低頻度文字分析 (J, K, Q, X, Z)*
+>*厳密二項上側確率と多重比較補正を使う希少文字チェック*
 
 ---
 
-## ✨ 機能一覧
+## ✨ 機能
 
-### シフト一覧（Tab1）
-- 26シフト（0〜25）の結果をカード形式で一覧表示
-- 各カードにシフト後テキストとA-Z出現回数テーブルを表示
-- 低頻度文字（J, K, Q, X, Z）をハイライト表示
-- 候補シフト（緑ボーダー）と除外シフト（赤ボーダー・半透明）を視覚的に区別
+### シフト一覧
 
-### 分析・フィルター（Tab2）
-- **頻度ヒートマップ**: 26行×26列のグリッドで全シフトの文字頻度を可視化
-  - セルホバー時に行・列・セルをハイライト
-  - ツールチップで詳細情報を表示
-- **低頻度文字分析**: 統計的手法による候補絞り込み
-  - 除外閾値の自動計算（二項分布の3σルール）
-  - 計算式の可視化と解説モーダル
-- **フィルター結果**: 候補シフトと除外シフトを分類表示
+- 入力へ0～25を加えた26通りのシフト結果
+- 各シフトにおけるA～Zの出現回数
+- 希少文字チェックの「基準内」「基準超過」表示
+- 英語文字頻度へのカイ二乗順位
+
+### 分析
+
+- 26シフト×26文字の頻度ヒートマップ
+- 一般的な英語文字頻度に対するカイ二乗値の上位5件
+- J、K、Q、X、Zを対象とする希少文字チェック
+- 厳密二項上側確率とBonferroni補正による基準値
+- 日本語／英語の画面切り替え
+
+未実装のタブは表示していません。
 
 ---
 
 ## 📖 使い方
 
-1. **暗号文を入力**: テキストエリアに解読したい暗号文を入力します（英字のみ有効）
-2. **シフト生成をクリック**: 26パターンすべてのシフト結果が生成されます
-3. **シフト一覧を確認**: Tab1で各シフトの復号結果と文字頻度を確認
-4. **分析・フィルターで絞り込み**: Tab2のヒートマップと低頻度文字分析で候補を絞り込み
+1. 暗号文を入力します。分析対象はASCII英字A～Zで、空白、数字、記号などは除外されます。
+2. 「26シフトを生成」を押します。
+3. 「シフト一覧」で、実際の文字列、カイ二乗順位、希少文字チェックを比較します。
+4. 「分析」で、ヒートマップ、上位5件、チェック基準と結果を確認します。
+5. 順位だけで決めず、読める語、文法、文脈を人が確認します。
+
+入力を変更すると古い分析結果は消えます。現在の入力に対して再生成してください。有効英字の上限は20,000文字です。
 
 ---
 
-## 📐 画面構成
+## 🔬 計算方法
 
-| タブ | 内容 |
-|------|------|
-| シフト一覧 | 26シフトの結果カード表示 |
-| 分析・フィルター | ヒートマップと低頻度文字分析 |
-| Tab3 (準備中) | 将来機能追加予定 |
-| Tab4 (準備中) | 将来機能追加予定 |
+### シフト
 
----
+画面の`Shift s`は、入力中の各文字へ`+s (mod 26)`を適用した結果です。たとえば`KHOOR`へ`Shift 23`を適用すると`HELLO`になります。
 
-## 🔬 技術的な説明
+### カイ二乗順位
 
-### 除外閾値の計算
+各シフトのA～Z出現回数を一般的な英語文字頻度と比較し、次の値を計算します。
 
-```
-除外閾値 = ⌈n × p + 3 × √(n × p)⌉
+```text
+χ² = Σ (観測回数 - 期待回数)² / 期待回数
 ```
 
-- **n**: 入力テキストの文字数
-- **p**: 低頻度文字の期待頻度（0.00772）
-- **3σルール**: 二項分布の正規近似に基づき、期待値から3標準偏差以上離れた値を異常と判定
+値が小さいほど基準分布に近いことを示しますが、最小のシフトが正解とは限りません。短文や特殊な語彙では順位が大きく変わります。
 
-### 判定ロジック
+### 希少文字チェック
 
-各シフトについてJ, K, Q, X, Zの最大出現回数を求め、それが除外閾値以上であれば候補から除外します。
-これにより、統計的に不自然なシフトを自動的にフィルタリングできます。
+J、K、Q、X、Zの5文字を同時に調べます。5文字中で最大の基準頻度`p = 0.00772`を共通の上限モデルとして使い、二項分布の上側確率を直接計算します。
+
+```text
+k = min { k : P(X ≥ k) ≤ α / 5 }
+X ~ Bin(n, p),  p = 0.00772,  α = 0.003
+```
+
+5文字のいずれかが`k`回以上なら、そのシフトを「基準超過・要確認」と表示します。たとえば有効英字100文字では`k = 6`、1,000文字では`k = 19`です。
+
+二項分布の標準偏差は`√(np(1-p))`です。ただし本ツールは基準値の算出に正規近似を使わず、厳密な離散確率を数値計算します。5文字を同時に見るため、各文字の上側確率には`α / 5`のBonferroni補正を適用します。
 
 ---
 
-## 🎯 本ツールの活用例
+## ⚠️ 読み方と限界
 
-### ゲーム「Cypher」での暗号解読
+- 「基準超過」は候補を捨てる命令ではなく、再確認を促す印である
+- Bonferroni補正は各シフト内の5文字に対するものであり、26シフト全体の「99.7%信頼区間」ではない
+- 独立で同じ確率の文字が並ぶという単純化した英語モデルである
+- 自然言語の文字には依存関係があり、文体、分野、固有名詞で頻度が変わる
+- カイ二乗順位も、文章の自然さ、意味、暗号方式、正しい鍵を証明しない
+- Caesar暗号以外の方式では、一覧中に正しい平文が存在しない場合がある
 
-- [POLYALPHABETIC SUBSTITUTION PUZZLE 03【Cypher編】](https://akademeia.info/?p=36264)
+本ツールは、統計的な観察材料を並べる教育用ツールです。暗号解読の証明や自動判定には使用できません。
+
+---
+
+## 🎯 ユースケース
+
+### このツールならではの使い方
+
+- **異なる指標の不一致を観察する**：`KHOOR ZRUOG`のような短文では、読める`Shift 23`がカイ二乗1位にならない場合がある。文字頻度だけでは意味を判定できないことを確認できる
+- **標本サイズと基準値を比較する**：100文字では`k = 6`、1,000文字では`k = 19`となる違いから、固定回数ではなく標本サイズを考慮する必要性を学べる
+- **多重比較の影響を学ぶ**：1文字だけでなく5文字を同時に調べるため、`α`を5で割る理由を画面の計算式と解説で確認できる
+- **頻度分布の回転を観察する**：同じ暗号文を26通りにずらし、ヒートマップの山が列方向へ移動する様子を追える
+
+### 一般的な用途
+
+- Caesar暗号と鍵長1のVigenère暗号の手動分析
+- 文字頻度分析、二項分布、カイ二乗、多重比較の教材
+- CTFやパズルの初期調査
+- 頻度だけに頼る推測が外れる例の作成
+
+関連例：[POLYALPHABETIC SUBSTITUTION PUZZLE 03【Cypher編】](https://akademeia.info/?p=36264)
+
+---
+
+## 🔗 参考資料
+
+- [NIST/SEMATECH e-Handbook: Binomial Distribution](https://www.itl.nist.gov/div898/handbook/eda/section3/eda366i.htm)
+- [NIST/SEMATECH e-Handbook: Bonferroni's method](https://www.itl.nist.gov/div898/handbook/prc/section4/prc473.htm)
 
 ---
 
 ## 📁 ディレクトリー構造
 
-```
+```text
 alphabet-shift-spectrum/
-├── index.html          # メインHTML（SPA）
-├── script.js           # アプリケーションロジック
-├── style.css           # ベースCSS・共通スタイル
-├── style-mobile.css    # モバイル用スタイル
-├── style-tablet.css    # タブレット用スタイル (600px+)
-├── style-laptop.css    # PC用スタイル (900px+)
+├── .github/workflows/test.yml # Node.js 22の自動テスト
+├── assets/                    # README用スクリーンショット
 ├── docs/
-│   ├── DETAIL_DESIGN.md  # 詳細設計書
-│   └── SCREEN_SPEC.md    # 画面仕様書
-├── assets/
-│   ├── screenshot.png    # シフト一覧スクリーンショット
-│   ├── screenshot1.png   # 頻度ヒートマップ
-│   └── screenshot2.png   # 低頻度文字分析
-├── README.md           # 本ドキュメント
-├── CLAUDE.md           # Claude Code用プロジェクト概要
-└── LICENSE             # ライセンスファイル
+│   ├── DETAIL_DESIGN.md       # 詳細設計書
+│   └── SCREEN_SPEC.md         # 画面仕様書
+├── test/
+│   ├── logic.test.js          # 計算コアの回帰テスト
+│   └── ui-contract.test.js    # 日英UI・CSP・文書契約テスト
+├── scripts/browser-smoke.mjs  # Chromium系ブラウザーの任意スモークテスト
+├── favicon.svg                # サイトアイコン
+├── index.html                 # 画面構造とCSP
+├── logic.js                   # シフト・頻度・統計計算コア
+├── messages.js                # 日本語／英語メッセージ
+├── script.js                  # 画面描画と操作
+├── style.css                  # 共通スタイル
+├── style-mobile.css           # モバイル基準のレイアウト
+├── style-tablet.css           # 600px以上の拡張
+├── style-laptop.css           # 900px以上の拡張
+├── package.json               # テストコマンド
+├── README.md                  # 日本語版
+├── README.en.md               # 英語版
+├── CLAUDE.md                  # 開発時の規則
+└── LICENSE                    # MIT License
 ```
 
 ---
 
 ## 💻 動作環境
 
-- モダンブラウザー（Chrome, Firefox, Safari, Edge）
+- モダンブラウザー（Chrome、Firefox、Safari、Edge）
 - JavaScript有効
-- レスポンシブ対応（モバイル〜PC）
+- 外部ライブラリー、ビルド処理、サーバー通信は不要
+- `index.html`を直接開く`file://`環境でも利用可能
+
+テストはNode.js 22で`npm test`を実行します。依存パッケージのインストールは不要です。
 
 ---
 
 ## 📄 ライセンス
 
-- ソースコードのライセンスは `LICENSE` ファイルを参照してください（MIT License）。
+- ソースコードのライセンスは`LICENSE`ファイルを参照してください（MIT License）。
 
 ---
 

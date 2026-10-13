@@ -1,0 +1,11 @@
+{
+  "name": "alphabet-shift-spectrum",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Educational Caesar-shift frequency analysis tool",
+  "scripts": {
+    "test": "node --test",
+    "test:browser": "node scripts/browser-smoke.mjs"
+  },
+  "license": "MIT"
+}
