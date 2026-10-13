@@ -34,6 +34,25 @@
       <h2 id="input-heading" class="input-heading" data-i18n="inputLabel">暗号文を入力</h2>
       <label class="visually-hidden" for="cipher-input" data-i18n="inputLabel">暗号文を入力</label>
       <textarea id="cipher-input" rows="4" maxlength="40000" spellcheck="false" data-i18n-placeholder="inputPlaceholder" placeholder="例: KHOOR ZRUOG（英字A-Zだけを分析します）"></textarea>
+      <fieldset class="reference-profile-controls">
+        <legend data-i18n="profileLegend">χ²の参照頻度</legend>
+        <label class="form-field" for="profile-select">
+          <span data-i18n="profileSelectLabel">参照プロファイル</span>
+          <select id="profile-select" aria-describedby="profile-description">
+            <option value="english" data-i18n="profileEnglish">一般英語</option>
+            <option value="uniform" data-i18n="profileUniform">均等分布（比較用）</option>
+            <option value="custom" data-i18n="profileCustom">利用者コーパス</option>
+          </select>
+        </label>
+        <div id="custom-profile-fields" class="custom-profile-fields" hidden>
+          <label class="form-field" for="profile-corpus">
+            <span data-i18n="profileCorpusLabel">参照用の英文コーパス</span>
+            <textarea id="profile-corpus" rows="3" maxlength="40000" spellcheck="false" data-i18n-placeholder="profileCorpusPlaceholder" placeholder="参照したい英文を入力"></textarea>
+          </label>
+          <span id="profile-corpus-count" class="input-info">有効文字数: 0 / 20000</span>
+        </div>
+        <p id="profile-description" class="profile-description" data-i18n="profileEnglishDescription">一般的な英語文字頻度を参照します。</p>
+      </fieldset>
       <div class="input-actions">
         <span id="char-count" class="input-info">有効文字数: 0 / 20000</span>
         <button id="generate-btn" class="btn-primary" type="button" data-i18n="generate">26シフトを生成</button>
@@ -68,7 +87,8 @@
           <h2 id="rank-heading" data-i18n="chiHeading">英語文字頻度への適合順位</h2>
           <button id="copy-summary-btn" class="btn-secondary" type="button" data-i18n="copySummary" disabled>結果概要をコピー</button>
         </div>
-        <p class="section-description" data-i18n="chiDescription">χ²が小さいほど、基準とした一般的な英語文字頻度に近いことを示します。順位は平文の正しさを保証しません。</p>
+        <p class="section-description" data-i18n="chiDescription">χ²が小さいほど、選択した参照プロファイルの文字頻度に近いことを示します。順位は平文の正しさを保証しません。</p>
+        <p id="active-profile" class="active-profile"></p>
         <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
         <div id="copy-fallback" class="copy-fallback" hidden>
           <label for="copy-fallback-text" data-i18n="copyFallbackLabel">手動コピー用の結果概要</label>
@@ -81,11 +101,27 @@
 
         <section class="contribution-subsection" aria-labelledby="contribution-heading">
           <h3 id="contribution-heading" data-i18n="contributionHeading">上位3候補のχ²寄与</h3>
-          <p class="section-description" data-i18n="contributionDescription">χ²への寄与が大きい5文字を候補ごとに示します。値が大きい文字ほど、観測頻度と基準英語頻度の差を強く押し上げています。</p>
+          <p class="section-description" data-i18n="contributionDescription">χ²への寄与が大きい5文字を候補ごとに示します。値が大きい文字ほど、観測頻度と選択した参照頻度の差を強く押し上げています。</p>
           <div id="chi-contribution-results" class="contribution-grid">
             <p class="placeholder-message" data-i18n="contributionPlaceholder">シフト生成後に文字別の寄与が表示されます。</p>
           </div>
         </section>
+      </section>
+
+      <section class="analysis-card record-section" aria-labelledby="record-heading">
+        <h2 id="record-heading" data-i18n="recordHeading">分析記録の保存・再読込</h2>
+        <p class="section-description" data-i18n="recordDescription">原文を含めず、文字別集計・計算条件・結果をJSONで保存します。読み込み時は保存値を検証して結果を再計算します。</p>
+        <div class="record-actions">
+          <button id="record-save-btn" class="btn-secondary" type="button" data-i18n="recordSave" disabled>JSONを保存</button>
+          <button id="record-load-btn" class="btn-secondary file-button" type="button" data-i18n="recordLoad">JSONを読み込む</button>
+          <input id="record-file" class="visually-hidden" type="file" accept="application/json,.json">
+          <button id="record-clear-btn" class="btn-secondary" type="button" data-i18n="recordClear" disabled>読込結果を消す</button>
+        </div>
+        <p id="record-status" class="record-status" role="status" aria-live="polite"></p>
+        <div id="record-results" class="record-results">
+          <p class="placeholder-message" data-i18n="recordPlaceholder">読み込んだ分析記録はここに表示されます。</p>
+        </div>
+        <p class="method-limit" data-i18n="recordLimit">JSONには原文・シフト後の文字列・利用者コーパス本文を保存しません。ただし、A～Zの出現回数は含まれます。</p>
       </section>
 
       <section class="analysis-card sensitivity-section" aria-labelledby="sensitivity-heading">
@@ -116,6 +152,29 @@
         </form>
         <p id="sensitivity-message" class="sensitivity-message" role="status" aria-live="polite"></p>
         <div id="sensitivity-results" class="sensitivity-results"></div>
+        <section class="monte-carlo-section" aria-labelledby="monte-carlo-heading">
+          <h3 id="monte-carlo-heading" data-i18n="monteCarloHeading">厳密値とモンテカルロ推定</h3>
+          <p class="section-description" data-i18n="monteCarloDescription">基準行のn、p、kを使い、単一の二項上側確率を疑似乱数で推定して厳密値と比べます。</p>
+          <form id="monte-carlo-form" class="monte-carlo-controls" novalidate>
+            <label class="form-field" for="monte-carlo-trials">
+              <span data-i18n="monteCarloTrials">試行回数</span>
+              <select id="monte-carlo-trials">
+                <option value="1000">1,000</option>
+                <option value="5000" selected>5,000</option>
+                <option value="20000">20,000</option>
+              </select>
+            </label>
+            <label class="form-field" for="monte-carlo-seed">
+              <span data-i18n="monteCarloSeed">乱数シード</span>
+              <input id="monte-carlo-seed" type="number" min="0" max="4294967295" step="1" value="107" inputmode="numeric">
+            </label>
+            <button id="monte-carlo-run" class="btn-secondary" type="submit" data-i18n="monteCarloRun">推定する</button>
+          </form>
+          <div id="monte-carlo-result" class="monte-carlo-result">
+            <p class="placeholder-message" data-i18n="monteCarloPlaceholder">試行回数とシードを選び、「推定する」を押してください。</p>
+          </div>
+          <p class="method-limit" data-i18n="monteCarloLimit">この推定は基準行における1つの二項上側確率だけを扱います。5文字全体や26シフト全体の誤判定率、復号の正しさは推定しません。</p>
+        </section>
         <p class="method-limit" data-i18n="sensitivityLimit">設定を変えた結果は教材上の比較です。入力したpやαが対象文章に適切であることや、暗号文の正解を示すものではありません。</p>
       </section>
 

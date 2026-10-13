@@ -68,6 +68,16 @@ main.container {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.record-actions,
+.monte-carlo-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+}
+
+.record-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .threshold-info {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

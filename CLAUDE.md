@@ -4,7 +4,7 @@ This file provides development guidance for Alphabet Shift Spectrum.
 
 ## Project overview
 
-Alphabet Shift Spectrum is a dependency-free browser tool for comparing all 26 Caesar shifts. It presents shifted text, A-Z counts, a heatmap, chi-square rankings and per-letter contributions against reference English frequencies, an exact-binomial rare-letter screen, and an independent threshold sensitivity lab.
+Alphabet Shift Spectrum is a dependency-free browser tool for comparing all 26 Caesar shifts. It presents shifted text, A-Z counts, a heatmap, chi-square rankings and per-letter contributions against a selectable reference profile, an exact-binomial rare-letter screen, a threshold sensitivity lab with a seeded Monte Carlo comparison, and aggregate-only JSON analysis records.
 
 The tool presents evidence for manual inspection. It does not prove the correct plaintext, key, language, or cipher type.
 
@@ -39,7 +39,7 @@ The Bonferroni adjustment applies to five letters within one shift. Do not descr
 
 ### Chi-square ranking
 
-Each shift is ranked by Pearson's chi-square statistic against the reference A-Z distribution. A smaller score is only a relative clue. Do not label the first-ranked shift as correct or attach a confidence percentage.
+Each shift is ranked by Pearson's chi-square statistic against the selected A-Z profile: general English, a uniform control, or a user corpus with add-one smoothing. A smaller score is only a relative clue. Do not label the first-ranked shift as correct or attach a confidence percentage. The uniform profile is intentionally uninformative and must keep numerical ties in shift order.
 
 The top three shifts expose the five largest per-letter contributions with observed counts, expected counts, differences, and contributions. Their sum is the same chi-square score used for ranking.
 
@@ -48,6 +48,14 @@ The top three shifts expose the five largest per-letter contributions with obser
 The lab compares exact thresholds at half, base, and double sample sizes while allowing `n`, `p`, family `alpha`, comparison count, and Bonferroni adjustment to be changed. It is independent of the main rare-letter screen. Never present user-selected values as validated parameters for the current text.
 
 The copied summary contains conditions and derived results only. It must not contain the input text.
+
+### Monte Carlo comparison
+
+The simulation compares one exact binomial upper-tail probability with a seeded estimate for the base sensitivity row. It does not estimate a five-letter or 26-shift family-wise error rate. Keep the 20,000-trial upper bound and deterministic seed behavior.
+
+### Analysis records
+
+JSON records contain A-Z input aggregates, reference frequencies, statistical settings, and derived results. They must omit plaintext, shifted strings, and user-corpus text. Imports must validate and reconstruct a sanitized record, then recalculate derived results instead of trusting stored rankings.
 
 ## Development
 
@@ -66,6 +74,8 @@ node --check script.js
 - Re-render all derived results after a language change.
 - Clear generated results when the input changes so stale analysis is never shown as current.
 - Re-render the threshold sensitivity lab and contribution evidence after every relevant input or language mutation.
+- Invalidate current rankings whenever the selected reference profile or user corpus changes.
+- Clear a Monte Carlo result whenever any of its input conditions changes, including sample-size synchronization after generation.
 - Keep page-level width within 320px and 390px viewports; wide data tables and the heatmap may scroll inside their own containers.
 - Preserve visible focus, keyboard tab navigation, modal focus containment, and 44px touch targets.
 - Keep unimplemented tabs hidden.

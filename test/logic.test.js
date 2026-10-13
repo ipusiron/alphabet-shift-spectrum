@@ -168,3 +168,91 @@ test('analysis summary contains reproducible conditions without plaintext', () =
   assert.equal(Object.hasOwn(summary, 'text'), false);
   assert.equal(JSON.stringify(summary).includes(text), false);
 });
+
+test('reference profiles include an uninformative uniform control and a smoothed custom corpus', () => {
+  const uniform = Core.createReferenceProfile('uniform');
+  assert.ok([...Core.ALPHABET].every((letter) => uniform.frequencies[letter] === 1 / 26));
+
+  const custom = Core.createReferenceProfile('custom', 'AAAAAB');
+  const total = Object.values(custom.frequencies).reduce((sum, value) => sum + value, 0);
+  assert.equal(custom.corpusLetterCount, 6);
+  assert.equal(custom.smoothing, 1);
+  assert.ok(Math.abs(total - 1) < 1e-12);
+  assert.ok(custom.frequencies.A > custom.frequencies.B);
+  assert.ok(custom.frequencies.B > custom.frequencies.C);
+});
+
+test('uniform reference gives every Caesar shift the same chi-square score', () => {
+  const rows = Core.rankShiftsByChiSquare(
+    Core.generateAllShifts('THEQUICKBROWNFOX'),
+    Core.UNIFORM_FREQUENCIES
+  );
+  const score = rows[0].chiSquare;
+  assert.ok(rows.every((row) => Math.abs(row.chiSquare - score) < 1e-12));
+  assert.deepEqual(rows.map((row) => row.chiSquareRank), [...Array(26).keys()].map((index) => index + 1));
+});
+
+test('seeded Monte Carlo is reproducible and approaches the exact binomial tail', () => {
+  const config = { sampleSize: 100, p: Core.P_MAX, threshold: 4, trials: 20000, seed: 107 };
+  const first = Core.simulateBinomialUpperTail(config);
+  const second = Core.simulateBinomialUpperTail(config);
+  assert.deepEqual(first, second);
+  assert.ok(first.exceedances >= 0 && first.exceedances <= first.trials);
+  assert.ok(first.absoluteError < 0.01, `${first.estimate} versus ${first.exact}`);
+});
+
+test('analysis record round-trip recalculates aggregate results without plaintext or corpus text', () => {
+  const text = 'KHOORZRUOG';
+  const baseFrequency = Core.calculateFrequency(text);
+  const profile = Core.createReferenceProfile('custom', 'THIS IS A REFERENCE CORPUS');
+  const thresholdInfo = { ...Core.calculateRareLetterThreshold(text.length), n: text.length };
+  const analyzedRows = Core.analyzeRows(
+    Core.generateAllShifts(text),
+    thresholdInfo.threshold,
+    profile.frequencies
+  );
+  const sensitivitySettings = {
+    sampleSize: text.length,
+    pMax: Core.P_MAX,
+    familyAlpha: Core.FAMILY_ALPHA,
+    comparisonCount: 5,
+    useBonferroni: true
+  };
+  const record = Core.createAnalysisRecord({
+    baseFrequency,
+    analyzedRows,
+    thresholdInfo,
+    referenceProfile: profile,
+    sensitivitySettings
+  });
+  const serialized = JSON.stringify(record);
+  assert.equal(serialized.includes(text), false);
+  assert.equal(serialized.includes('REFERENCECORPUS'), false);
+
+  const tampered = JSON.parse(serialized);
+  tampered.result.topShifts[0].shift = 999;
+  const restored = Core.parseAnalysisRecord(tampered);
+  assert.equal(restored.analyzedRows.length, 26);
+  assert.equal(restored.thresholdInfo.n, text.length);
+  assert.equal(restored.referenceProfile.id, 'custom');
+  assert.deepEqual(restored.record.result.topShifts, record.result.topShifts);
+  assert.notEqual(restored.record.result.topShifts[0].shift, 999);
+});
+
+test('analysis record rejects a mismatched aggregate total', () => {
+  const record = {
+    schema: Core.ANALYSIS_RECORD_SCHEMA,
+    version: Core.ANALYSIS_RECORD_VERSION,
+    inputAggregate: { letterCount: 2, frequencies: Core.calculateFrequency('A') },
+    referenceProfile: { id: 'english' },
+    rareLetterModel: { pMax: Core.P_MAX, familyAlpha: Core.FAMILY_ALPHA, comparisonCount: 5 },
+    sensitivitySettings: {
+      sampleSize: 2,
+      pMax: Core.P_MAX,
+      familyAlpha: Core.FAMILY_ALPHA,
+      comparisonCount: 5,
+      useBonferroni: true
+    }
+  };
+  assert.throws(() => Core.parseAnalysisRecord(record), /does not match/);
+});

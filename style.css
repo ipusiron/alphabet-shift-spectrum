@@ -90,7 +90,7 @@ a:hover {
   color: var(--color-primary-dark);
 }
 
-button, input, textarea {
+button, input, textarea, select {
   font: inherit;
 }
 
@@ -105,6 +105,8 @@ button {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
+select:focus-visible,
+.file-button:focus-visible,
 .freq-table-wrapper:focus-visible,
 .contribution-table-wrapper:focus-visible,
 .sensitivity-table-wrapper:focus-visible,
@@ -112,6 +114,11 @@ textarea:focus-visible,
 a:focus-visible {
   outline: 3px solid #0ea5e9;
   outline-offset: 2px;
+}
+
+select {
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
 button:disabled {

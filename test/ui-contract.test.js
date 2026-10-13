@@ -70,11 +70,51 @@ test('analysis view exposes contribution evidence and the sensitivity lab', () =
 });
 
 test('sensitivity inputs rerender on every input mutation', () => {
-  assert.ok(script.includes("document.getElementById('sensitivity-form').addEventListener('input', renderSensitivityLab)"));
+  assert.ok(script.includes("document.getElementById('sensitivity-form').addEventListener('input', handleSensitivityMutation)"));
+  const mutationBody = script.match(/function handleSensitivityMutation\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(mutationBody.includes('renderSensitivityLab()'));
+  assert.ok(mutationBody.includes('renderMonteCarloResult()'));
+  assert.ok(mutationBody.includes('renderRecordSection()'));
   const renderBody = script.match(/function renderDynamicResults\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
   assert.ok(renderBody.includes('renderContributionResults()'));
   assert.ok(renderBody.includes('renderSensitivityLab()'));
+  assert.ok(renderBody.includes('renderMonteCarloResult()'));
   assert.ok(renderBody.includes('renderCopyControls()'));
+  assert.ok(renderBody.includes('renderActiveProfile()'));
+  assert.ok(renderBody.includes('renderRecordSection()'));
+});
+
+test('reference profile controls invalidate stale rankings and feed the core calculation', () => {
+  assert.ok(html.includes('id="profile-select"'));
+  assert.ok(html.includes('id="profile-corpus"'));
+  assert.ok(script.includes("document.getElementById('profile-select').addEventListener('change', handleProfileMutation)"));
+  assert.ok(script.includes("document.getElementById('profile-corpus').addEventListener('input', handleProfileMutation)"));
+  const generateBody = script.match(/function handleGenerate\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(generateBody.includes('readReferenceProfile()'));
+  assert.ok(generateBody.includes('referenceProfile.frequencies'));
+  const profileBody = script.match(/function handleProfileMutation\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(profileBody.includes('clearAnalysis()'));
+});
+
+test('analysis records expose file controls and are built from aggregate counts', () => {
+  for (const id of ['record-save-btn', 'record-load-btn', 'record-file', 'record-clear-btn', 'record-results']) {
+    assert.ok(html.includes(`id="${id}"`), `missing ${id}`);
+  }
+  const recordBody = script.match(/function buildCurrentAnalysisRecord\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(recordBody.includes('Core.calculateFrequency(appState.normalizedText)'));
+  assert.ok(recordBody.includes('Core.createAnalysisRecord'));
+  assert.ok(!recordBody.includes('cipher-input'));
+  const importBody = script.match(/async function handleRecordFile\(event\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(importBody.includes('Core.parseAnalysisRecord'));
+});
+
+test('Monte Carlo comparison is explicit, seeded, and manually triggered', () => {
+  assert.ok(html.includes('id="monte-carlo-form"'));
+  assert.ok(html.includes('id="monte-carlo-seed"'));
+  assert.ok(html.includes('id="monte-carlo-run"'));
+  const handlerBody = script.match(/function handleMonteCarloSubmit\(event\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(handlerBody.includes('Core.createThresholdSensitivitySeries'));
+  assert.ok(handlerBody.includes('Core.simulateBinomialUpperTail'));
 });
 
 test('copied analysis summary is built from structured results rather than plaintext', () => {
